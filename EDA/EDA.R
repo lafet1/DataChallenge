@@ -51,14 +51,51 @@ tfidf <- dtm_train %>%
   as.tbl() %>%
   mutate(sums = rowSums(.)) %>% 
   mutate_all(funs(./sums)) %>% 
-  select(-sums)
+  select(-sums) %>% sapply(mean) * 
+  log2(dim(dtm_train)[1] / col_sums(dtm_train))
+summary(tfidf)
 
-abc <-sapply(tfidf, mean)
-abc
-tfidf
+
+library(wordcloud)
+freq = data.frame(freqterms=sort(colSums(as.matrix(dtm_train)), decreasing=TRUE))
+wordcloud(rownames(freq), freq[,1], max.words=50, colors=brewer.pal(3, "Dark2"))
+
 # # define tfidf model
 # tfidf = TfIdf$new()
 # # fit model to train data and transform train data with fitted model
 # dtm_train_tfidf = fit_transform(dtm_train, tfidf)
+# glimpse(dtm_train_tfidf)
 
-glimpse(dtm_train_tfidf)
+tcm <- create_tcm(it_train, vectorizer)
+print(dim(tcm))
+
+glove = GlobalVectors$new(word_vectors_size = 50, vocabulary = pruned_vocab, x_max = 10)
+vectors_main <- glove$fit_transform(tcm, n_iter = 20)
+word_vectors_context <- glove$components
+word_vectors = vectors_main + t(word_vectors_context)
+d = dist2(word_vectors, method="cosine")  #Smaller values means closer
+print(dim(d))
+
+
+find_close_words = function(w,d,n) {
+  words = rownames(d)
+  i = which(words==w)
+  if (length(i) > 0) {
+    res = sort(d[i,])
+    print(as.matrix(res[2:(n+1)]))
+  } 
+  else {
+    print("Word not in corpus.")
+  }
+}
+
+
+find_close_words("flat",d,10)
+find_close_words("manila",d,10)
+find_close_words("bar",d,10)
+find_close_words("car",d,10)
+find_close_words("iphone",d,10)
+
+find_close_words("sunny",d,10)
+find_close_words("south",d,10)
+find_close_words("north",d,10)
