@@ -65,7 +65,7 @@ summary(tfidf)
 # visualization
 library(wordcloud)
 freq <- data.frame(freqterms = sort(colSums(as.matrix(dtm_train)), decreasing = TRUE))
-wordcloud(rownames(freq), freq[, 1], max.words=50, colors=brewer.pal(3, "Dark2"))
+wordcloud(rownames(freq), freq[, 1], max.words=50, colors = brewer.pal(3, "Dark2"))
 
 # getting tcm, necessary for GloVe
 tcm <- create_tcm(it_train, vectorizer)
@@ -80,7 +80,7 @@ d <- dist2(word_vectors, method = "cosine")  #Smaller values means closer
 print(dim(d))
 
 # finding the similar words
-find_close_words <- function(w,d,n) {
+find_close_words <- function(w, d, n) {
   words <- rownames(d)
   i <- which(words == w)
   if (length(i) > 0) {
@@ -93,12 +93,12 @@ find_close_words <- function(w,d,n) {
 }
 
 
-find_close_words("flat",d,10)
-find_close_words("manila",d,10)
-find_close_words("bar",d,10)
-find_close_words("car",d,10)
-find_close_words("iphone",d,10)
+find_close_words("flat", d, 10)
+find_close_words("manila", d, 10)
+find_close_words("bar", d, 10)
+find_close_words("car", d, 10)
+find_close_words("iphone", d, 10)
 
-find_close_words("sunny",d,10)
-find_close_words("south",d,10)
-find_close_words("north",d,10)
+find_close_words("sunny", d, 10)
+find_close_words("south", d, 10)
+find_close_words("north", d, 10)
