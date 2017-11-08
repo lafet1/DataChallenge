@@ -5,11 +5,13 @@ library(tokenizers)
 library(stringr)
 library(slam)
 
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd("..")
+
 share_of_data <- 0.01
-
-
 set.seed(1211)
-data <- read_feather("C:\\Users\\jan\\Documents\\Škola\\UvA\\Výuka\\Machine Learning for Econometrics\\Project\\data\\ph_ads_payment_indicator.feather")
+data <- read_feather("data/ph_ads_payment_indicator.feather")
 subdf <- data %>% mutate(rnd = runif(dim(data)[1])) %>% filter(rnd<share_of_data)
 rm(data)
 save.image()
