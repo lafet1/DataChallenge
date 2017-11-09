@@ -76,7 +76,7 @@ glove <- GlobalVectors$new(word_vectors_size = 50, vocabulary = pruned_vocab, x_
 vectors_main <- glove$fit_transform(tcm, n_iter = 20)
 word_vectors_context <- glove$components
 word_vectors <- vectors_main + t(word_vectors_context)
-d <- dist2(word_vectors, method = "cosine")  #Smaller values means closer
+d <- dist2(word_vectors, method = "cosine")  # smaller values means closer
 print(dim(d))
 
 # finding the similar words
