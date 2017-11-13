@@ -98,7 +98,6 @@ find_close_words("manila", d, 10)
 find_close_words("bar", d, 10)
 find_close_words("car", d, 10)
 find_close_words("iphone", d, 10)
-
 find_close_words("sunny", d, 10)
 find_close_words("south", d, 10)
 find_close_words("north", d, 10)

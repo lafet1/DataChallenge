@@ -1,0 +1,67 @@
+---
+title: "EDA for DataChallenge Naspers II, ML for Econometrics"
+author: "Jan Hynek"
+date: "9 listopadu 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### First, loading data and packages
+```{r}
+library(tidyverse)
+library(feather)
+library(text2vec)
+library(tokenizers)
+library(stringr)
+library(slam)
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd("..")
+
+share_of_data <- 0.01
+set.seed(1211)
+data <- read_feather("data/ph_ads_payment_indicator.feather")
+subdf <- data %>% mutate(rnd = runif(dim(data)[1])) %>% filter(rnd < share_of_data)
+rm(data)
+
+
+
+```
+
+
+
+# Division by categories
+#### In this part, we look how categories have effect on was_promoted dummy var and other 
+```{r}
+division_quantile <- 0.93
+
+categories <- subdf %>% 
+  select(category_id, price, was_promoted) %>%
+  mutate(was_promoted = if_else(was_promoted == "t", 1, 0)) %>%
+  group_by(category_id) %>% 
+  summarise(count = n(), 
+            avg_price = mean(price, na.rm = TRUE), 
+            was_promoted = sum(was_promoted, na.rm = TRUE)) %>% 
+  arrange(desc(avg_price)) %>% 
+  filter(!is.na(avg_price)) %>% 
+  mutate(big_category = if_else(count > quantile(count, probs = division_quantile), "t", "f"))
+```
+
+
+```{r}
+categories%>% group_by(big_category) %>% 
+  summarise(was_promoted = sum(was_promoted), 
+            count = sum(count)) %>% 
+  mutate(share = was_promoted/count)
+```
+
+
+```{r}
+ggplot(categories, 
+       aes(x = log(count), y = was_promoted/count)) + 
+  geom_jitter() 
+```
+
