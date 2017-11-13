@@ -52,14 +52,16 @@ dim(dtm_train)
 dtm_train <- dtm_train[row_sums(dtm_train) > 0,]
 
 # getting tfidf
-tfidf <- dtm_train %>% 
-  as.matrix() %>% 
+tfidf <- dtm_train %>% # here we play with the formats, every function requires
+  as.matrix() %>% # different one
   as.data.frame() %>% 
   as.tbl() %>%
   mutate(sums = rowSums(.)) %>% 
   mutate_all(funs(. / sums)) %>% 
   select(-sums) %>% sapply(mean) * 
-  log2(dim(dtm_train)[1] / col_sums(dtm_train))
+  log2(dim(dtm_train)[1] / col_sums(as.simple_triplet_matrix(dtm_train) > 0))
+  # the notation col_sums(dtm_train > 0) requires a sparse matrix
+  
 summary(tfidf)
 
 # visualization
