@@ -8,10 +8,10 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
+# Introduction
 During this analysis, as we have nice and big dataset, we decided to use text2vec package, created by Dmitri Selivanov.
 Its main benefit is its efficiency, on the other hand its documentation is sometimes bit lacking. However, this will allow us to do word embeddings which we consider as a nice touch for our feature engineering. 
-```{r}
+```{r packages}
 library(tidyverse)
 library(feather)
 library(text2vec)
@@ -22,7 +22,7 @@ library(lubridate)
 ```
 
 Loading data. We have files in one folder and data in another folder, therefore we set working directory like this. Afterwards, we set share of data which we would like to work with during this analysis, as working with whole dataset is usually inconvinient and uneccessary. However, we calculated results for the whole
-```{r, echo = FALSE, warning=FALSE, error=FALSE}
+```{r loading data, echo = FALSE, warning=FALSE, error=FALSE}
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 setwd("..")
 
@@ -34,11 +34,13 @@ subdf <- data %>%
   filter(rnd < share_of_data)
 ```
 
+
+# Document term matrix creation
 In this section we prepare the features using text. 
 We create our preparation function, which will be applied to all texts. This consists of making all letters lower case, removing numbers, one- and two-letter words and omitting whitespace.
 Then we create tokenizer function. As we would like to create document - term matrix, we need word tokenizer.
 
-```{r}
+```{r prep and token fun}
 prep_fun <- function(x) {
   x <- tolower(x) # lower case
   x <- str_replace_all(x, '[:digit:]', ' ') # removing numbers
@@ -50,7 +52,7 @@ tok_fun <- function(x){tokenize_words(x, stopwords = stopwords())} # removing st
 
 These functions are afterwards fed to iterator, which iterates on the descriptions. Then iterator creates vocabulary in a format of sparse matrix. In our case dataset consists of _534 thousand_ different terms. 
 
-```{r}
+```{r iterator and vocab}
 iterator <- itoken(subdf$description, # data to clean
                   preprocessor = prep_fun, 
                   tokenizer = tok_fun, 
@@ -59,7 +61,7 @@ iterator <- itoken(subdf$description, # data to clean
 vocab <- create_vocabulary(iterator)
 ```
 However, most of these words usually appears only once in the whole dataset. It is useful then to prune these words. We chose arbitrarily that word has to be at least 10 times in the dataset, in at least 0.1%  and at most 50% of the documents. This left us with ~2500 words. According to Paul Nation and Robert Waring (1997), this is equal to text coverage of ~80%. 
-```{r}
+```{r pruning vocab}
 pruned_vocab <- prune_vocabulary(vocab, 
                                 term_count_min = 10, 
                                 doc_proportion_max = 0.5,
@@ -67,35 +69,35 @@ pruned_vocab <- prune_vocabulary(vocab,
 
 ```
 Now, we are ready to vectorize the results and create Document - Term Matrix.
-```{r}
+```{r dtm}
 vectorizer <- vocab_vectorizer(pruned_vocab)
 dtm <- create_dtm(iterator, vectorizer)
 ```
 
 Let's have a look at the DTM. Dimensions fits - 4M rows, 2500 columns.
 The least common word is 4000 times present in the dataset, the most common one have almost 750k occurences.
-```{r}
+```{r dtm stats}
 dim(dtm)
 summary(col_sums(dtm))
 ```
 
 What are the most common words? 
-```{r}
+```{r most common}
 sort(col_sums(dtm), decreasing = TRUE)[1:24]
 
 ```
 What about the least present words? Do they make any sense?
-```{r}
+```{r least common}
 sort(col_sums(dtm), decreasing = FALSE)[1:24]
 ```
 
-```{r}
+```{r wordcloud}
 library(wordcloud)
 freq <- data.frame(freqterms = sort(col_sums(dtm), decreasing = TRUE))
 wordcloud(rownames(freq), freq[, 1], max.words=50, colors = brewer.pal(3, "Dark2"))
 ```
 Let's do the same for the titles as well.
-```{r}
+```{r dtm and wordcloud for titles}
 iterator_title <- itoken(subdf$title, 
                   preprocessor = prep_fun, 
                   tokenizer = tok_fun, 
@@ -116,6 +118,36 @@ What about the dimensions?
 dim(dtm_title)
 ```
 We have less words. This is expected, as titles have less words overall.
+
+#Metadata creation
+
+We decided to harvest other important information from the text. We think it might be useful to know how many letters are in uppercase, how many punctuation is in the text and else.
+-punctuation
+-uppercase
+-share of uppercae
+-share of punctuation
+-
+
+
+
+```{r}
+metadata_creator <- function(string, varname){
+  result <- c()
+  result[1] <- str_count(string, "[:upper:]")
+  result[2] <- str_count(string, "[:punct:]")
+  names(result) <- c("upper", 'punct')
+  names(result) <- paste(names(result), varname, sep = "_")
+}
+```
+
+
+
+
+
+
+
+
+
 
 
 # Word embeddings
