@@ -147,6 +147,7 @@ adding_data <- function(dataset, data, varname){
   
  aux <- data.frame(matrix(NA, nrow = length(data), ncol = 5))
  names(aux) <- c("upper", 'punct', 'length', 'excl_marks', 'binary_upper')
+ names(aux) <- paste(names(aux), varname, sep = "_")
  
   for (i in (1:length(data))){
     aux[i, ] <- metadata_creator(data[i], varname)
