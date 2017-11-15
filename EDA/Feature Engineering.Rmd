@@ -136,8 +136,34 @@ metadata_creator <- function(string, varname){
   result <- c()
   result[1] <- str_count(string, "[:upper:]")
   result[2] <- str_count(string, "[:punct:]")
-  names(result) <- c("upper", 'punct')
+  result[3] <- str_count(string)
+  result[4] <- str_count(string, "!") > 0
+  result[5] <- str_count(string, "[:upper:]") > 0
+  names(result) <- c("upper", 'punct', 'length', 'excl_marks', 'binary_upper')
   names(result) <- paste(names(result), varname, sep = "_")
+  return(result)
 }
+
+adding_data <- function(dataset, data, varname){
+  
+ aux <- data.frame(matrix(NA, nrow = length(data), ncol = 5))
+ names(aux) <- c("upper", 'punct', 'length', 'excl_marks', 'binary_upper')
+ names(aux) <- paste(names(aux), varname, sep = "_")
+ 
+  for (i in (1:length(data))){
+    aux[i, ] <- metadata_creator(data[i], varname)
+  }
+  
+  dataset <- cbind(dataset, aux)
+  return(dataset)
+}
+```
+
+Adding the metadata features for both description and title.
+```{r}
+
+subdf_meta <- adding_data(subdf, subdf$description, "descr")
+subdf_meta <- adding_data(subdf_meta, subdf_meta$title, "title")
+
 ```
 
