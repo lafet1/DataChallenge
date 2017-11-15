@@ -44,8 +44,8 @@ Then we create tokenizer function. As we would like to create document - term ma
 prep_fun <- function(x) {
   x <- tolower(x) # lower case
   x <- str_replace_all(x, '[:digit:]', ' ') # removing numbers
-  x <- str_replace_all(x, '\\b\\w{1,2}\\b',' ')
-  x <- str_replace_all(x, '[:punct]', ' ')# removing one and two letter words
+  x <- str_replace_all(x, '\\b\\w{1,2}\\b',' ') # removing one and two letter words
+  x <- str_replace_all(x, '[:punct:]', ' ') # removing punctuation
   x <- str_replace_all(x, '\\s+', ' ') # removing white space
 }
 tok_fun <- function(x){tokenize_words(x, stopwords = stopwords())} # removing stopwords
@@ -119,6 +119,18 @@ What about the dimensions?
 dim(dtm_title)
 ```
 We have less words. This is expected, as titles have less words overall.
+
+
+Alternative dtm based on tfidf
+```{r}
+tfidf = TfIdf$new()
+# fit model to train data and transform train data with fitted model
+dtm_tfidf = fit_transform(dtm, tfidf)
+dtm_title_tfidf = fit_transform(dtm_title, tfidf)
+
+
+```
+
 
 #Metadata creation
 
