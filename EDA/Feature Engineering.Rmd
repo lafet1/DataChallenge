@@ -146,11 +146,12 @@ We decided to harvest other important information from the text. We think it mig
 ```{r}
 metadata_creator <- function(string, varname){
   result <- c()
-  result[1] <- str_count(string, "[:upper:]")
-  result[2] <- str_count(string, "[:punct:]")
-  result[3] <- str_count(string)
-  result[4] <- str_count(string, "!") > 0
-  result[5] <- str_count(string, "[:upper:]") > 0
+  d <- string
+  result[1] <- str_count(d, "[:upper:]")
+  result[2] <- str_count(d, "[:punct:]")
+  result[3] <- str_count(d)
+  result[4] <- str_count(d, "!") > 0
+  result[5] <- str_count(d, "[:upper:]") > 0
   names(result) <- c("upper", 'punct', 'length', 'excl_marks', 'binary_upper')
   names(result) <- paste(names(result), varname, sep = "_")
   return(result)
