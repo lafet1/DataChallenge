@@ -19,6 +19,7 @@ library(tokenizers)
 library(stringr)
 library(slam)
 library(lubridate)
+library(textstem)
 ```
 
 Loading data. We have files in one folder and data in another folder, therefore we set working directory like this. Afterwards, we set share of data which we would like to work with during this analysis, as working with whole dataset is usually inconvinient and uneccessary. However, we calculated results for the whole
@@ -26,12 +27,19 @@ Loading data. We have files in one folder and data in another folder, therefore 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 setwd("..")
 
-share_of_data <- 0.01
+share_of_data <- 1
 set.seed(926021)
-data <- read_feather("data/ph_ads_payment_indicator.feather")
-subdf <- data %>% 
-  mutate(rnd = runif(dim(subdf[1]))) %>%
-  filter(rnd < share_of_data)
+d <- read_feather("data/ph_ads_payment_indicator.feather")
+if (share_of_data <= 1){
+    subdf <- d
+    rm(d)
+} else{
+    subdf <- d %>% 
+    mutate(rnd = runif(dim(subdf[1]))) %>%
+    filter(rnd < share_of_data)
+    subdf$rnd <- NULL
+    rm(d)
+}
 ```
 
 
@@ -46,12 +54,16 @@ prep_fun <- function(x) {
   x <- str_replace_all(x, '[:digit:]', ' ') # removing numbers
   x <- str_replace_all(x, '\\b\\w{1,2}\\b',' ') # removing one and two letter words
   x <- str_replace_all(x, '[:punct:]', ' ') # removing punctuation
-  x <- str_replace_all(x, '\\s+', ' ') # removing white space
+  x <- str_replace_all(x, '\\s+', ' ')# removing white space
+  x <- lemmatize_strings(x) # lemmatization of words. similar to stemming
+  return(x)
 }
-tok_fun <- function(x){tokenize_words(x, stopwords = stopwords())} # removing stopwords
+tok_fun <- function(x){
+  tokenize_words(x, stopwords = stopwords()) # removing stopwords
+  } 
 ```
 
-These functions are afterwards fed to iterator, which iterates on the descriptions. Then iterator creates vocabulary in a format of sparse matrix. In our case dataset consists of _534 thousand_ different terms. 
+These functions are afterwards fed to iterator, which iterates on the descriptions. Then iterator creates vocabulary in a format of sparse matrix. In our case dataset consists of _432 thousand_ different terms. 
 
 ```{r iterator and vocab}
 iterator <- itoken(subdf$description, # data to clean
@@ -66,9 +78,10 @@ However, most of these words usually appears only once in the whole dataset. It 
 pruned_vocab <- prune_vocabulary(vocab, 
                                 term_count_min = 10, 
                                 doc_proportion_max = 0.5,
-                                doc_proportion_min = 0.001)
+                                doc_proportion_min = 0.0005)
 
 ```
+
 Now, we are ready to vectorize the results and create Document - Term Matrix.
 ```{r dtm}
 vectorizer <- vocab_vectorizer(pruned_vocab)
@@ -121,7 +134,7 @@ dim(dtm_title)
 We have less words. This is expected, as titles have less words overall.
 
 
-Alternative dtm based on tfidf
+We also add alternative dtm based on tfidf. This will be later used for modelling and comparing, which of these approaches is better.
 ```{r}
 tfidf = TfIdf$new()
 # fit model to train data and transform train data with fitted model
@@ -135,48 +148,45 @@ dtm_title_tfidf = fit_transform(dtm_title, tfidf)
 #Metadata creation
 
 We decided to harvest other important information from the text. We think it might be useful to know how many letters are in uppercase, how many punctuation is in the text and else.
--punctuation
--uppercase
--share of uppercae
--share of punctuation
--
-
 
 
 ```{r}
-metadata_creator <- function(string, varname){
-  result <- c()
-  d <- string
-  result[1] <- str_count(d, "[:upper:]")
-  result[2] <- str_count(d, "[:punct:]")
-  result[3] <- str_count(d)
-  result[4] <- str_count(d, "!") > 0
-  result[5] <- str_count(d, "[:upper:]") > 0
-  names(result) <- c("upper", 'punct', 'length', 'excl_marks', 'binary_upper')
-  names(result) <- paste(names(result), varname, sep = "_")
-  return(result)
-}
+subdf <- subdf %>% mutate(upper_descr = str_count(description, "[:upper:]")) %>% 
+  mutate(punct_descr = str_count(description, "[:punct:]")) %>% 
+  mutate(length_descr = str_count(description)) %>% 
+  mutate(excl_descr = (str_count(description, "!") > 0)) %>%
+  mutate(has_capslock_descr = str_count(description, "[:upper:]") > 0) %>% 
+  mutate(upper_title = str_count(title, "[:upper:]")) %>% 
+  mutate(punct_title = str_count(title, "[:punct:]")) %>% 
+  mutate(length_title = str_count(title)) %>% 
+  mutate(excl_title = (str_count(title, "!") > 0)) %>%
+  mutate(has_capslock_title = str_count(title, "[:upper:]") > 0) %>%
+  mutate(n_words_title = str_count(title,'\\w+')) %>%
+  mutate(n_words_descr = str_count(description,'\\w+'))
 
-adding_data <- function(dataset, data, varname){
-  
- aux <- data.frame(matrix(NA, nrow = length(data), ncol = 5))
- names(aux) <- c("upper", 'punct', 'length', 'excl_marks', 'binary_upper')
- names(aux) <- paste(names(aux), varname, sep = "_")
- 
-  for (i in (1:length(data))){
-    aux[i, ] <- metadata_creator(data[i], varname)
-  }
-  
-  dataset <- cbind(dataset, aux)
-  return(dataset)
-}
+tok_fun_dplyr <- function(x){
+  x <- tokenize_words(x, stopwords = stopwords())
+  x <- unlist(x)
+  return(x)
+  } 
+
+
+abc <- subdf %>% 
+  select(description, n_words_descr) %>% 
+  transmute(sum(hunspell_check(tok_fun_dplyr(description)))/n_words_descr)
+
+
+```
+We can also get rid of several variables. After thorough EDA we have found that these variables do not add value for future analysis.
+```{r}
+subdf$has_gg <- NULL
+subdf$has_skype <- NULL
+subdf$has_phone <- NULL
 ```
 
-Adding the metadata features for both description and title.
+
+Now it is time to add DTMs to original table, and save!
 ```{r}
-
-subdf_meta <- adding_data(subdf, subdf$description, "descr")
-subdf_meta <- adding_data(subdf_meta, subdf_meta$title, "title")
-
+subdf2 <- cbind(subdf, dtm)
 ```
 
