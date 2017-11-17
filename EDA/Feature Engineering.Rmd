@@ -10,8 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 # Introduction
 During this analysis, as we have nice and big dataset, we decided to use text2vec package, created by Dmitri Selivanov.
-Its main benefit is its efficiency, on the other hand its documentation is sometimes bit lacking. However, this will allow us to do word embeddings which we consider as a nice touch for our feature engineering. 
-```{r packages}
+Its main benefit is its efficiency, on the other hand its documentation is sometimes bit lacking.
+
+```{r packages, warning=FALSE}
 library(tidyverse)
 library(feather)
 library(text2vec)
@@ -24,13 +25,14 @@ library(hunspell)
 ```
 
 Loading data. We have files in one folder and data in another folder, therefore we set working directory like this. Afterwards, we set share of data which we would like to work with during this analysis, as working with whole dataset is usually inconvinient and uneccessary. However, we calculated results for the whole
-```{r loading data, echo = FALSE, warning=FALSE, error=FALSE}
-# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-# setwd("..")
 
+```{r loading data, echo = FALSE, warning=FALSE, error=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd("..")
+d <- read_feather("data/ph_ads_payment_indicator.feather")
 share_of_data <- 1
 set.seed(926021)
-d <- read_feather("C:\\Users\\jan\\Documents\\Škola\\UvA\\Výuka\\Machine Learning for Econometrics\\Project\\DataChallenge\\data\\ph_ads_payment_indicator.feather")
+
 if (share_of_data <= 1){
     subdf <- d
     rm(d)
@@ -89,7 +91,7 @@ vectorizer <- vocab_vectorizer(pruned_vocab)
 dtm <- create_dtm(iterator, vectorizer)
 ```
 
-Let's have a look at the DTM. Dimensions fits - 4M rows, 2500 columns.
+Let's have a look at the DTM. Dimensions fits - 4M rows, 3600 columns.
 The least common word is 4000 times present in the dataset, the most common one have almost 750k occurences.
 ```{r dtm stats}
 dim(dtm)
@@ -97,11 +99,14 @@ summary(col_sums(dtm))
 ```
 
 What are the most common words? 
+
 ```{r most common}
 sort(col_sums(dtm), decreasing = TRUE)[1:24]
 
 ```
+
 What about the least present words? Do they make any sense?
+
 ```{r least common}
 sort(col_sums(dtm), decreasing = FALSE)[1:24]
 ```
@@ -111,7 +116,9 @@ library(wordcloud)
 freq <- data.frame(freqterms = sort(col_sums(dtm), decreasing = TRUE))
 wordcloud(rownames(freq), freq[, 1], max.words=50, colors = brewer.pal(3, "Dark2"))
 ```
+
 Let's do the same for the titles as well.
+
 ```{r dtm and wordcloud for titles}
 iterator_title <- itoken(subdf$title, 
                   preprocessor = prep_fun, 
@@ -128,14 +135,18 @@ dtm_title <- create_dtm(iterator_title, vectorizer_title)
 freq <- data.frame(freqterms = sort(col_sums(dtm_title), decreasing = TRUE))
 wordcloud(rownames(freq), freq[, 1], max.words=50, colors = brewer.pal(3, "Dark2"))
 ```
+
 What about the dimensions?
+
 ```{r}
 dim(dtm_title)
 ```
+
 We have less words. This is expected, as titles have less words overall.
 
 
 We also add alternative dtm based on tfidf. This will be later used for modelling and comparing, which of these approaches is better.
+
 ```{r}
 tfidf = TfIdf$new()
 # fit model to train data and transform train data with fitted model
@@ -152,12 +163,6 @@ We decided to harvest other important information from the text. We think it mig
 
 
 ```{r}
-tok_fun_dplyr <- function(x){
-  x <- tokenize_words(x, stopwords = stopwords())
-  x <- unlist(x)
-  return(x)
-  } 
-
 subdf <- subdf %>% mutate(upper_descr = str_count(description, "[:upper:]")) %>% 
   mutate(punct_descr = str_count(description, "[:punct:]")) %>% 
   mutate(length_descr = str_count(description)) %>% 
@@ -170,16 +175,28 @@ subdf <- subdf %>% mutate(upper_descr = str_count(description, "[:upper:]")) %>%
   mutate(has_capslock_title = str_count(title, "[:upper:]") > 0) %>%
   mutate(n_words_title = str_count(title,'\\w+')) %>%
   mutate(n_words_descr = str_count(description,'\\w+')) 
+
+glimpse(subdf)
 ```
 
-This is experiment. What is the share of correct words in the document?
-```{r}
+This is experiment. What is the share of words which are correctly spelled, and also in English dictionary in the document?
+
+```{r, eval=FALSE}
+tok_fun_dplyr <- function(x){
+  x <- tokenize_words(x, stopwords = stopwords())
+  x <- unlist(x)
+  return(x)
+}
+
+
 subdf <- subdf %>% 
   mutate(correct_share_descr = sum(hunspell_check(tok_fun_dplyr(description)))/n_words_descr) %>% 
   mutate(correct_share_title = sum(hunspell_check(tok_fun_dplyr(title)))/n_words_descr)
 
 ```
+
 We can also get rid of several variables. After thorough EDA we have found that these variables do not add value for future analysis.
+
 ```{r}
 subdf$has_gg <- NULL
 subdf$has_skype <- NULL
