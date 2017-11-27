@@ -100,8 +100,22 @@ model %>% evaluate(x_test, y_test)
 # true value of y.
 
 # Exercise 6
-# 
+# Epoch is one iteration of the SGD algorothm, i.e. your algorithm sees every data
+# point exactly once.
 
+# Exercise 7
+# Batch size determines at how many data points our algorithm looks before it updates
+# our weights. Meaning every epoch consists of several batches. The smallest/largest
+# theoretical number of batches is 1, i.e. all data points at once, or N, i.e. every data point
+# alone, which is the so-called online SGD.
+
+# Exercise 8
+# The validation split is the part where the algorithm is fine-tuned, i.e. the
+# hyperparamaters are tinkered with and their optimal values are found. This set is 
+# used to choose the optimal model and possibly detect over-fitting on the training
+# data.
+
+# Exercise 9
 
 # logit in keras
 model1 <- keras_model_sequential() 
