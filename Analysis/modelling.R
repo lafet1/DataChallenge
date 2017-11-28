@@ -43,13 +43,12 @@ d <- d %>%
 
 d <- d %>% 
   group_by(user_id) %>% 
-  mutate(n_user_id = length(user_id))
+  mutate(n_user_id = length(user_id)) %>% ungroup()
 
 d <- d %>% 
   mutate(bata_price = as.numeric(if_else((price + 1) %% 10 == 0, TRUE, FALSE))) %>% 
   mutate(was_promoted = as.numeric(was_promoted))
 
-d <- ungroup(d)
 
 
 rnd <- runif(n = dim(d)[1])
@@ -75,13 +74,8 @@ d_test$user_id <- NULL
 d_test$created_at_first <- NULL
 d_test$wday <- as.numeric(d_test$wday)
 
-names_d_train <- colnames(d_train)
-d_train <- unname(d_train)
 d_train <- as.matrix(d_train)
 
-names_d_test <- colnames(d_test)
-d_test <- unname(d_test)
-d_train <- as.matrix(d_train)
 d_test <- as.matrix(d_test)
 
 model <- keras_model_sequential()
