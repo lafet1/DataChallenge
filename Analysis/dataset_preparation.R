@@ -120,6 +120,17 @@ d_train$hour <- cut(d_train$hour,
                     labels = c(0, 1, 3))
 
 
+clust_cat <- d %>%
+  select(category_id, region_id, city_id)
+
+clust_cat <- cbind(clust_cat, d$price)
+
+
+groups <- kproto(clust_cat, 10)
+
+
+
+
 # for (i in unique_cats){
 #   column_name <- paste("cat", i, sep = "_")
 #   d2 <- d2 %>% 
