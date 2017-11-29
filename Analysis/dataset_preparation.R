@@ -19,8 +19,8 @@ d$created_at_first <- ymd_hms(d$created_at_first, tz = "Asia/Manila")
 d$is_liquid <- as.numeric(ifelse(d$is_liquid == "t", 1, 0))
 d$was_promoted <- as.numeric(ifelse(d$was_promoted == "t", 1, 0))
 
-d <- d %>% mutate(price = as.numeric(is.na(price))) %>% 
-  mutate(price = if_else(is.na(price), 0, price)) %>% 
+d <- d %>%  
+  mutate(no_price = if_else(is.na(price), 0, price)) %>% 
   mutate(hour = as.numeric(hour(created_at_first))) %>% 
   mutate(no_descr = as.numeric(is.na(upper_descr))) %>%
   mutate(month = month(created_at_first)) %>% 
@@ -43,8 +43,17 @@ d <- d %>%
   mutate(n_category_id = n()) %>% 
   ungroup() 
 
-
 d[is.na(d)] <- 0
+
+d <- d %>%
+  mutate(upper_share_descr = (upper_descr/length_descr),
+         upper_share_title = (upper_title/length_title),
+         punct_share_title = (punct_title/length_title),
+         punct_share_descr = (punct_descr/length_descr),
+         bata_price = as.numeric(if_else((price + 1) %% 10 == 0, TRUE, FALSE)))
+
+
+
 
 
 d$user_id <- NULL
@@ -82,19 +91,6 @@ d$bata_price <- as.factor(d$bata_price)
 
 
 
-d <- d %>%
-  mutate(user_id = as.numeric(user_id),
-         visible_in_profile = as.numeric(visible_in_profile),
-         excl_descr = as.numeric(excl_descr),
-         has_capslock_descr = as.numeric(has_capslock_descr),
-         excl_title = as.numeric(excl_title),
-         has_capslock_title = as.numeric(has_capslock_title),
-         upper_share_descr = (upper_descr/length_descr),
-         upper_share_title = (upper_title/length_title),
-         punct_share_title = (punct_title/length_title),
-         punct_share_descr = (punct_descr/length_descr),
-         bata_price = as.numeric(if_else((price + 1) %% 10 == 0, TRUE, FALSE)),
-         was_promoted = as.numeric(was_promoted))
 
 d <- d %>% 
   group_by(user_id) %>% 
