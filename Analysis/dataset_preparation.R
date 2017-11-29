@@ -82,39 +82,6 @@ d$bata_price <- as.factor(d$bata_price)
 
 
 
-# d %>% 
-#   mutate(region_id = as.numeric(region_id)) %>%
-#   mutate(subregion_id = as.numeric(subregion_id)) %>%
-#   mutate(category_id = as.numeric(category_id)) 
-
-
-
-
-
-
-d <- d %>% 
-  group_by(user_id) %>% 
-  mutate(n_user_id = length(user_id)) %>% 
-  ungroup() %>% 
-  group_by(region_id) %>% 
-  mutate(n_region_id = length(region_id)) %>% 
-  ungroup() %>% 
-  group_by(subregion_id) %>% 
-  mutate(n_subregion_id = n()) %>% 
-  ungroup() %>% 
-  group_by(city_id) %>% 
-  mutate(n_city_id = n()) %>% 
-  ungroup() %>% 
-  group_by(category_id) %>% 
-  mutate(n_category_id = n()) %>% 
-  ungroup() %>% 
-  select(-c(user_id, 
-            region_id,
-            subregion_id, 
-            city_id, 
-            category_id, 
-            created_at_first))
-
 d_train$hour <- cut(d_train$hour,
                     breaks = c(0, 8, 16, 23),
                     labels = c(0, 1, 3))
