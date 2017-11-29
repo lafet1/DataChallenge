@@ -121,9 +121,9 @@ d_train$hour <- cut(d_train$hour,
 
 
 clust_cat <- d %>%
-  select(category_id, region_id, city_id)
+  select(category_id, region_id, city_id, price) %>%
+  as.data.frame()
 
-clust_cat <- cbind(clust_cat, d$price)
 
 
 groups <- kproto(clust_cat, 10)
