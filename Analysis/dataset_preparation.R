@@ -70,7 +70,9 @@ d <- d %>%
             category_id, 
             created_at_first))
 
-
+d_train$hour <- cut(d_train$hour,
+                    breaks = c(0, 8, 16, 23),
+                    labels = c(0, 1, 3))
 
 
 # for (i in unique_cats){
