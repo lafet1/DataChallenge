@@ -19,6 +19,16 @@ d$created_at_first <- ymd_hms(d$created_at_first, tz = "Asia/Manila")
 d$is_liquid <- as.numeric(ifelse(d$is_liquid == "t", 1, 0))
 d$was_promoted <- as.numeric(ifelse(d$was_promoted == "t", 1, 0))
 
+d <- d %>% mutate(price = as.numeric(is.na(price))) %>% 
+  mutate(price = if_else(is.na(price), 0, price)) %>% 
+  mutate(hour = as.numeric(hour(created_at_first))) %>% 
+  mutate(no_descr = as.numeric(is.na(upper_descr))) %>%
+  mutate(month = month(created_at_first)) %>% 
+  mutate(wday = wday(created_at_first))  
+
+
+
+
 d$region_id <- as.factor(d$region_id)
 d$subregion_id <- as.factor(d$subregion_id)
 d$city_id <- as.factor(d$city_id)
@@ -62,7 +72,7 @@ d <- d %>%
 
 
 
-  mutate(wday = wday(created_at_first)) %>% 
+  
   mutate(no
 
 # d %>% 
@@ -71,11 +81,7 @@ d <- d %>%
 #   mutate(category_id = as.numeric(category_id)) 
 
 
-d <- d %>% mutate(price = as.numeric(is.na(price))) %>% 
-  mutate(price = if_else(is.na(price), 0, price)) %>% 
-  mutate(hour = as.numeric(hour(created_at_first))) %>% 
-  mutate(no_descr = as.numeric(is.na(upper_descr))) %>%
-  mutate(month = month(created_at_first))
+
 
 d[is.na(d)] <- 0
 
