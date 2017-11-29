@@ -44,51 +44,34 @@ d <- d %>%
   ungroup() 
 
 
+d[is.na(d)] <- 0
+
+
+d$user_id <- NULL
+d$created_at_first <- NULL
+
 d$region_id <- as.factor(d$region_id)
 d$subregion_id <- as.factor(d$subregion_id)
 d$city_id <- as.factor(d$city_id)
 d$category_id <- as.factor(d$category_id)
 d$visible_in_profile <- as.factor(d$visible_in_profile)
-d$user_id <- NULL
-d$created_at_first <- NULL
+d$month <- as.factor(d$month)
+d$hour <- as.factor(d$hour)
+
 d$excl_descr <- as.factor(d$excl_descr)
 d$has_capslock_descr <- as.factor(d$has_capslock_descr)
 d$excl_title <- as.factor(d$excl_title)
 d$has_capslock_title <- as.factor(d$has_capslock_title)
 d$is_liquid <- as.factor(d$is_liquid)
 d$was_promoted <- as.factor(d$was_promoted)
-d$month <- as.factor(d$month)
-d$hour <- as.factor(d$hour)
 d$no_descr <- as.factor(d$no_descr)
 d$no_price <- as.factor(d$no_price)
 d$bata_price <- as.factor(d$bata_price)
 
 
 
-d <- d %>% 
-  group_by(user_id) %>% 
-  mutate(n_user_id = length(user_id)) %>% 
-  ungroup() %>% 
-  group_by(region_id) %>% 
-  mutate(n_region_id = length(region_id)) %>% 
-  ungroup() %>% 
-  group_by(subregion_id) %>% 
-  mutate(n_subregion_id = n()) %>% 
-  ungroup() %>% 
-  group_by(city_id) %>% 
-  mutate(n_city_id = n()) %>% 
-  ungroup() %>% 
-  group_by(category_id) %>% 
-  mutate(n_category_id = n()) %>% 
-  ungroup() 
 
 
-
-
-
-
-  
-  mutate(no
 
 # d %>% 
 #   mutate(region_id = as.numeric(region_id)) %>%
@@ -98,7 +81,6 @@ d <- d %>%
 
 
 
-d[is.na(d)] <- 0
 
 d <- d %>%
   mutate(user_id = as.numeric(user_id),
