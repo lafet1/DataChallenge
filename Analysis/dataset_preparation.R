@@ -26,7 +26,22 @@ d <- d %>% mutate(price = as.numeric(is.na(price))) %>%
   mutate(month = month(created_at_first)) %>% 
   mutate(wday = wday(created_at_first))  
 
-
+d <- d %>% 
+  group_by(user_id) %>% 
+  mutate(n_user_id = length(user_id)) %>% 
+  ungroup() %>% 
+  group_by(region_id) %>% 
+  mutate(n_region_id = length(region_id)) %>% 
+  ungroup() %>% 
+  group_by(subregion_id) %>% 
+  mutate(n_subregion_id = n()) %>% 
+  ungroup() %>% 
+  group_by(city_id) %>% 
+  mutate(n_city_id = n()) %>% 
+  ungroup() %>% 
+  group_by(category_id) %>% 
+  mutate(n_category_id = n()) %>% 
+  ungroup() 
 
 
 d$region_id <- as.factor(d$region_id)
