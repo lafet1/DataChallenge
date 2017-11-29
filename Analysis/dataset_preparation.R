@@ -19,8 +19,8 @@ d$created_at_first <- ymd_hms(d$created_at_first, tz = "Asia/Manila")
 d$is_liquid <- as.numeric(ifelse(d$is_liquid == "t", 1, 0))
 d$was_promoted <- as.numeric(ifelse(d$was_promoted == "t", 1, 0))
 
-d <- d %>%  
-  mutate(no_price = if_else(is.na(price), 0, price)) %>% 
+d <- d %>% mutate(no_price = as.numeric(is.na(price))) %>% 
+  mutate(price = if_else(is.na(price), 0, price)) %>% 
   mutate(hour = as.numeric(hour(created_at_first))) %>% 
   mutate(no_descr = as.numeric(is.na(upper_descr))) %>%
   mutate(month = month(created_at_first)) %>% 
