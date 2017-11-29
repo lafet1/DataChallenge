@@ -24,6 +24,7 @@ clust_cat <- cbind(clust_cat, d_train$price)
 
 groups <- kproto(clust_cat, 5)
 
-
+recode(d_play$wday, `Mon` = 0, `Tues` = 0, `Wed` = 0, `Thurs` = 0, `Fri` = 0, 
+       `Sat` = 1, `Sun` = 1)
 
 

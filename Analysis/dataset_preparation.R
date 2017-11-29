@@ -85,7 +85,8 @@ d$bata_price <- as.factor(d$bata_price)
 d_train$hour <- cut(d_train$hour,
                     breaks = c(0, 8, 16, 23),
                     labels = c(0, 1, 3))
-
+d_train$wday <- recode(d_play$wday, `Mon` = 0, `Tues` = 0, `Wed` = 0, `Thurs` = 0, `Fri` = 0, 
+       `Sat` = 1, `Sun` = 1)
 
 clust_cat <- d %>%
   select(category_id, region_id, city_id, price) %>%
