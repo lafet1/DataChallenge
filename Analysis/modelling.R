@@ -1,4 +1,4 @@
-
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rnd <- runif(n = dim(d)[1])
 d_test <- d[rnd < 0.15, ]
@@ -31,7 +31,7 @@ model %>%
   layer_dense(units = 2, activation = 'softmax')
 
 model %>% compile(
-  loss = 'mean_squared_error',
+  loss = 'categorical_hinge',
   optimizer = optimizer_sgd(),
   metrics = c('accuracy')
 )
@@ -46,8 +46,6 @@ history <- model %>% fit(
   validation_split = 0.2
 )
 
-sapply(d_train, class)
-sum(sapply(d_train, function(x) sum(is.na(x))))
 
 
 model %>% predict_classes(d_test) %>% head()
