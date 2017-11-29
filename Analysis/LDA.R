@@ -38,7 +38,7 @@ def <- def %>% inner_join(doc_topic_distr_title, by = "id")
 write_feather(def, "file.feather")
 write_feather(doc_topic_distr_title, "doc_topic.feather")
 doc_topic_distr_title <- abc %>% as.tbl()
-colnames(doc_topic_distr_title) <- c("id", paste("titleV", 1:25, sep = "_"))
+colnames(doc_topic_distr_title) <- c("id", paste("title_V", 1:25, sep = ""))
 
 def$title <- NULL
 def$description <- NULL
