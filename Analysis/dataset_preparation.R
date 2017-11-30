@@ -30,8 +30,8 @@ d <- d %>%
   group_by(user_id) %>% 
   mutate(n_user_id = length(user_id)) %>% 
   ungroup() %>% 
-  group_by(region_id) %>% 
-  mutate(n_region_id = length(region_id)) %>% 
+  group_by(city_id) %>% 
+  mutate(n_city_id = length(city_id)) %>% 
   ungroup() %>% 
   group_by(subregion_id) %>% 
   mutate(n_subregion_id = n()) %>% 
@@ -59,7 +59,7 @@ d <- d %>%
 d$user_id <- NULL
 d$created_at_first <- NULL
 
-d$region_id <- as.factor(d$region_id)
+d$city_id <- as.factor(d$city_id)
 d$subregion_id <- as.factor(d$subregion_id)
 d$city_id <- as.factor(d$city_id)
 d$category_id <- as.factor(d$category_id)
@@ -78,29 +78,216 @@ d$no_price <- as.factor(d$no_price)
 d$bata_price <- as.factor(d$bata_price)
 
 
+abcd <- d %>% 
+  group_by(category_id, was_promoted) %>% 
+  count(was_promoted) 
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+
+b <- b[(b$category_id %in% a$category_id), ]
+a <- a[(a$category_id %in% b$category_id), ]
+
+key <- b %>% 
+  left_join(a, by = "category_id") %>%
+  mutate(was_to_wasnt_category = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_category)) %>% ungroup() %>%
+  select(category_id, was_to_wasnt_category)
+
+d <- d %>% 
+  left_join(key, by = "category_id")
 
 
 
 
-d_train$hour <- cut(d_train$hour,
-                    breaks = c(0, 8, 16, 23),
-                    labels = c(0, 1, 3))
-d_train$wday <- recode(d_play$wday, `Mon` = 0, `Tues` = 0, `Wed` = 0, `Thurs` = 0, `Fri` = 0, 
-       `Sat` = 1, `Sun` = 1)
-
-clust_cat <- d %>%
-  select(category_id, region_id, city_id, price) %>%
-  as.data.frame()
 
 
-
-groups <- kproto(clust_cat, 10)
+d %>% select(category_id, was_to_wasnt_category) %>% group_by(was_to_wasnt_category) %>% count() %>% arrange(desc(was_to_wasnt_category))
 
 
 
 
-# for (i in unique_cats){
-#   column_name <- paste("cat", i, sep = "_")
+abcd <- d %>% 
+  group_by(city_id, was_promoted) %>% 
+  count(was_promoted)
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+
+f <- b[!(b$city_id %in% a$city_id), ]
+g <- a[!(a$city_id %in% b$city_id), ]
+f
+g
+
+
+
+b <- b[(b$city_id %in% a$city_id), ]
+a <- a[(a$city_id %in% b$city_id), ]
+
+key <- b %>% 
+  left_join(a, by = "city_id") %>%
+  mutate(was_to_wasnt_city = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_city)) %>% ungroup() %>%
+  select(city_id, was_to_wasnt_city)
+
+d <- d %>% 
+  left_join(key, by = "city_id")
+
+
+
+
+abcd <- d %>% 
+  group_by(city_id, was_promoted) %>% 
+  count(was_promoted)
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+
+f <- b[!(b$city_id %in% a$city_id), ]
+g <- a[!(a$city_id %in% b$city_id), ]
+f
+g
+
+
+
+b <- b[(b$city_id %in% a$city_id), ]
+a <- a[(a$city_id %in% b$city_id), ]
+
+key <- b %>% 
+  left_join(a, by = "city_id") %>%
+  mutate(was_to_wasnt_city = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_city)) %>% ungroup() %>%
+  select(city_id, was_to_wasnt_city)
+
+d <- d %>% 
+  left_join(key, by = "city_id")
+
+
+d[is.na(d)] <- 0
+
+
+
+d <- d %>% 
+  select(-c(region_id, subregion_id, city_id, category_id))
+
+d <- d %>% 
+  mutate(eight_to_sixteen = (hour %in% c(8:16))) %>% 
+  mutate(seventeen_to_twentyfour = (hour %in% c(17:24)))
+
+d <- d %>% mutate(m1 = (month == 1), 
+                  m2 = (month == 2), 
+                  m3 = (month == 3), 
+                  m4 = (month == 4),
+                  m5 = (month == 5),
+                  m6 = (month == 6),
+                  m7 = (month == 7),
+                  m8 = (month == 8),
+                  m9 = (month == 9))
+d <- d %>% mutate(is_weekend = (wday > 5))
+
+d <- d %>% select(-wday)
+d <- d %>% select(-month)
+d <- d %>% select(-hour)
+
+my_fun <- function(x) {if_else((x==1 | x==TRUE), 1, 0)}
+
+d <- d %>% mutate_if(is.factor, my_fun)
+d <- d %>% mutate_if(is.logical, as.numeric)
+a <- d %>% select_if(is.factor)
+
+
+rm(clust_categories_text)
+rm(groups)
+rm(groups_categories)
+sapply(d, class)
+# clust_cat <- d %>%
+#   select(city_id, city_id, price) %>%
+#   as.data.frame()
+# 
+# 
+# 
+# groups <- kproto(clust_cat, 10)
+# abc <- groups$cluster[d$was_promoted == 1]
+# abcd <- table(abc)
+# 
+# abcde <- groups$size
+# 
+# abcd/abcde
+# 
+# 
+# #######
+# clust_categories <- d %>%
+#   select(category_id, price) %>%
+#   as.data.frame()
+# 
+# 
+# 
+# groups_categories <- kproto(clust_categories, 10)
+# abc <- groups_categories$cluster[d$was_promoted == 1]
+# abcd <- table(abc)
+# 
+# 
+# clust_categories_wp <- d %>%
+#   select(category_id, price, was_promoted) %>%
+#   as.data.frame() %>% kproto(10)
+# 
+# clust_categories_il <- d %>%
+#   select(category_id, price, is_liquid) %>%
+#   as.data.frame() %>% kproto(10)
+# 
+# clust_categories_il_wp <- d %>%
+#   select(category_id, price, is_liquid, was_promoted) %>%
+#   as.data.frame() %>% kproto(10)
+# 
+# 
+# 
+# clust_categories_text <- d %>%
+#   select(category_id, starts_with("V",ignore.case = FALSE)) %>%
+#   as.data.frame()
+# 
+# clust_categories_text_meta <- d %>%
+#   select(category_id, ends_with("title"), ends_with("descr")) %>%
+#   as.data.frame() %>% kproto(10)
+# 
+# clust_text_meta <- d %>%
+#   select(ends_with("title"), ends_with("descr")) %>%
+#   as.data.frame() %>% kproto(10)
+# 
+# rm(d)
+# 
+# groups_descr <- kproto(clust_categories_text, 8)
+# 
+# 
+# groups_categories <- kproto(clust_categories, 10)
+abc <- clust_categories_text$cluster[d$was_promoted == 1]
+abcd <- table(abc)
+
+abcde <- clust_categories_text$size
+abc
+abcd/abcde
+
+d$bad_cl_text <- (clust_categories_text$cluster == 3)
+d$good_cl_text <- (clust_categories_text$cluster == 8)
+
+
+abc <- groups_categories$cluster[d$was_promoted == 1]
+abcd <- table(abc)
+
+abcde <- groups_categories$size
+abc
+abcd/abcde[-3]
+
+d$good_cl_categs <- (groups_categories$cluster == 10)
+
+
+
+# 
+# 
+# 
+# abcde
+# 
+# abcd# for (i in unique_cats){
+# #   column_name <- paste("cat", i, sep = "_")
 #   d2 <- d2 %>% 
 #     mutate(temporary = if_else(category_id == i, 1, 0))
 #   colnames(d2)[dim(d2)[2]] <- column_name

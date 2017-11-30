@@ -1,4 +1,11 @@
+set.seed(921021)
+
+
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+rnd <- runif(n = dim(d)[1])
+d <- d[rnd < 0.01, ]
+
+
 
 rnd <- runif(n = dim(d)[1])
 d_test <- d[rnd < 0.15, ]
@@ -24,7 +31,7 @@ d_test <- as.matrix(d_test)
 
 model <- keras_model_sequential()
 model %>% 
-  layer_dense(units = 50, activation = 'sigmoid', input_shape = c(dim(d_train)[2]))  %>% 
+  layer_dense(units = 50, activation = 'relu', input_shape = c(dim(d_train)[2]))  %>% 
   layer_dropout(rate = 0.4) %>%
   layer_dense(units = 25, activation = 'relu') %>%
   layer_dropout(rate = 0.3) %>%
@@ -48,7 +55,8 @@ history <- model %>% fit(
 
 
 
-model %>% predict_classes(d_test) %>% head()
+model %>% 
+  predict_classes(d_test) %>% head()
 model %>% evaluate(d_test, y_test)
 
 # 630998/630998 [==============================] - 14s 22us/step
