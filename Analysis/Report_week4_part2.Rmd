@@ -18,7 +18,7 @@ library(caret)
 set.seed(921021)
 
 
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 ```
 
 
@@ -182,6 +182,22 @@ confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
 
 ```
 
+
+
+What happens if we add more epochs?
+```{r}
+history <- nn %>% fit(
+  x_train, y_train, shuffle = T,
+  epochs = 10, batch_size = 2048, 
+  validation_set = 0.2)
+
+
+pred <- nn %>% 
+  predict_classes(x_test)
+
+
+confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
+```
 
 # Question 13
 
