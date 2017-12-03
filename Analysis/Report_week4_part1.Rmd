@@ -100,14 +100,17 @@ This also means that not as many neurons die, i.e. if the activation is zero in 
 
 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 history <- model %>% fit(
   x_train, y_train, 
   epochs = 30, batch_size = 128, 
   validation_split = 0.2
 )
 plot(history)
+```
 
+
+```{r}
 model %>% predict_classes(x_test) %>% head()
 model %>% evaluate(x_test, y_test)
 ```
@@ -119,8 +122,9 @@ In case we do not have a classification task. There are alternative measures for
 classification such as ROC (if binary), precision, recall or F-measure. There are
 several reasons to use alternatives. If we put more weight e.g. on false positives
 than false negatives or if we want more than yes/no label, i.e. ROC curve or
-precision/recall curve. In the end one must choose the measure that is good
-for the individual task at hand, there is no universal best solution.
+precision/recall curve is more appropriate for this task.
+In the end one must choose the measure that is good for the individual task at hand, 
+there is no universal best solution.
 
 # Exercise 5
 We do not cover the mathematical formulation of cross-entropy here as it is
@@ -134,8 +138,8 @@ The cross-entropy then means the strength of our "surprise" when we learn the
 true value of y.
 
 # Exercise 6
-Epoch is one iteration of the SGD algorothm, i.e. your algorithm sees every data
-point exactly once.
+Epoch is one iteration of the optimizer (i.e. SGD or in our case rmsprop) algorothm, 
+i.e. In one epoch your algorithm sees every data point exactly once.
 
 # Exercise 7
 Batch size determines at how many data points our algorithm looks before it updates
