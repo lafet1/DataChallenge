@@ -53,7 +53,7 @@ model %>%
   layer_dense(units = 512, input_shape = c(dim(df_train)[2])) %>% 
   layer_dropout(rate = 0.4) %>% 
   layer_activity_regularization(l1 = 0.00002) %>%
-  layer_activation_leaky_relu(alpha = 0.35) %>%
+  layer_activation_leaky_relu(alpha = 0.55) %>%
   
   # sofar (probably) best combinations (all in layer 1) - alpha = 0.55, l1 = 0.00003;
   # alpha = 0.6, l1 = 0.00003; alpha = 0.6, l1 = 0.00002; alpha = 0.55, l1 = 0.00001
@@ -88,7 +88,7 @@ pred <- model %>%
 
 # model %>% evaluate(d_test, y_test)
 
-confusionMatrix(as.numeric(pred), y_test[, 2])
+confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
 
 #### STOP ####
 
