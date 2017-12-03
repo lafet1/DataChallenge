@@ -1,0 +1,170 @@
+---
+title: "Team Assignment - Week 4"
+author: "Stepan Svoboda, Jan Hynek, Nursultan Svankulov"
+date: "2 prosince 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(keras)
+library(mlr)
+library(caret)
+
+set.seed(921021)
+
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+
+# Question 10
+
+We have done altered our data in two ways since our last assignment. Firstly we will describe the way we approached the data from our DTM and then changes to the rest of the dataset done after our last deadline.
+
+We had our Bag of Words normalized using the TF-IDF and then applied the standard Latent Dirichlet allocation. We have ddecided to have group our description DTM into 50 groups and our title DTM into 25 groups based on the technical constraints of our memory size and based on descriptions and recommendations found throughout several documentations/implementations about LDA and some discussions related to the problem of dimensionality reduction of text data. We also considered using the Word2vec or some version of word embeddings but again due to uncertainty about the outcome and too high computational cost we have steered away and chose the functioning approach of LDA on the normalized Bag of Words.
+
+Second part of our work with data was dimensionality reduction through changes of our factor, i.e. categories, regions and cities. These dummy variables had many levels and would bring a lage number of additional dimensons into our dataset and we were worried that such a large number of additional dimensions would severely lower the strength of our model. We have found a way around it and created a numerical variable aimed at distinguishing between these categories/regions/cities. We took the number of promoted items and divided by the number of not promoted items in each category/city/ region and managed to squeeze into this variable both its size and share of promoted items, while significantly lowering the number of dimensions. We have also considered encoding by hand categories as well as cities and regions into more homogenous clusters, e.g. electronics, large cities, regions in the north etc.
+
+Later we addressed the imbalanced data set issue. We simply cannot train a model on a dataset such as this where we have only slightly more than 2% of positive observations. There are two solutions to this issue, generating more positive observations or ignoring some negative. Due to the size of our dataset and the overall imbalancedness we combined these two approaches. We have also tried the SMOTE (Synthetic minority oversampling technique) but the results were not satisfying. This is most likely due to the SMOTE picking up on too much noise and not replicating the signal in our positive observations. On top of that we were constrained by our machinery as applying algorithm such as SMOTE on dataset of this size is not feasible on our setup. Thus we have chosen to use basic under- and oversampling of our dataset to have the share of observations slightly above the 50/50 threshold, i.e. somewhere between 50 and 60% of negative observations present in dataset.
+
+# Question 11
+
+We start off by loading the data, under- and oversampling and preparing them for the modeling.
+
+```{r}
+rnd <- runif(n = dim(d)[1])
+d <- d[rnd < 0.01, ]
+
+##### actual data load is missing
+
+rnd <- runif(n = dim(d)[1])
+# d_test <- d[rnd < 0.15, ] # true data for final modeling
+# d_train <- d[rnd >= 0.15, ]
+
+d_test <- d[rnd < 0.05, ] # only for testing purposes, leave it here?
+d_train <- d[rnd >= 0.9, ]
+
+rm(d)
+rm(rnd)
+
+
+y_test <- to_categorical(d_test$was_promoted)
+y_train <- to_categorical(d_train$was_promoted)
+d_test$was_promoted <- NULL
+d_train$was_promoted <- NULL
+
+# balancing data set
+df_train <- cbind(d_train, unname(y_train[, 2]))
+names(df_train)[length(names(df_train))] <- "was_promoted"
+df_train$was_promoted <- as.factor(df_train$was_promoted)
+task = makeClassifTask(data = df_train, target = "was_promoted")
+task.under = undersample(task, rate = 1/3)
+task.over = oversample(task.under, rate = 10)
+
+df_train <- getTaskData(task.over)
+y2_train <- to_categorical(as.numeric(df_train$was_promoted) - 1)
+df_train$was_promoted <- NULL
+
+df_train <- as.matrix(df_train)
+d_test <- as.matrix(d_test)
+```
+
+Now we train the logit model.
+
+```{r}
+logit <- keras_model_sequential() 
+
+logit %>% 
+  layer_dense(units = 10, activation = 'sigmoid', input_shape = c(784)) %>% 
+  
+summary(logit)
+
+logit %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history1 <- logit %>% fit(
+  df_train, y2_train, 
+  epochs = 30, batch_size = 128, 
+  validation_split = 0.2
+)
+plot(history1)
+
+pred1 <- model1 %>% predict_classes(x_test) %>% head()
+
+confusionMatrix(as.numeric(pred1), y_test[, 2])
+
+```
+
+
+# Question 12
+
+Here we train the neural network.
+
+```{r}
+# keras
+model <- keras_model_sequential()
+model %>% 
+  layer_dense(units = 512, input_shape = c(dim(df_train)[2])) %>% 
+  layer_dropout(rate = 0.4) %>% 
+  layer_activity_regularization(l1 = 0.00001) %>% # between 0.0001 and 0.00001
+  layer_activation_leaky_relu(alpha = 0.6) %>% # prolly 0.55, sofar best results
+  
+  layer_dense(units = 128) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_activation_leaky_relu(alpha = 0.3) %>%
+
+  layer_dense(units = 32) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_activation_leaky_relu(alpha = 0.3) %>%
+  
+  layer_dense(units = 2, activation = 'softmax')
+
+
+model %>% compile(
+  loss = c('binary_crossentropy'),
+  optimizer = optimizer_adam(lr = 0.00001),
+  metrics = c('accuracy'))
+
+
+
+history <- model %>% fit(
+  df_train, y2_train, shuffle = T,
+  epochs = 10, batch_size = 512, 
+  validation_set = 0.2)
+
+
+pred <- model %>% 
+  predict_classes(d_test)
+
+confusionMatrix(as.numeric(pred), y_test[, 2])
+
+
+sum(y_test[, 1])/dim(y_test)[1] # share of negative responses
+```
+
+
+# Question 13
+
+We will describe our findings first, then move on to questions and how we addressed or tried to address them.
+
+Our models could not in simple accuracy beat the simple model of predicting only 0. This is mainly caused by our dataset being hugely imbalanced and the heuristic of classifying everyone as zero is extremely strong. *dopln shit az budou vysledky neuronovky a logitu*
+
+Our problems and questions were plentiful. We have solved and addressed some but many are still bothering us. One of the problems is setting up the net. As we had no experience whatsoever we were quite lost and stil are extremely unsure. The results fell most of the time basically random and unlike all of our previous experince with modeling (basic regression, some more complex ones, SVMs, ...)
+we did not feel that after the modeling ended we had achieved as much as was with the data and the method possible in the time elapsed. We have simply no idea whether the chosen structure is good for this kind of problem (e.g. should we have used something like convolutional/recurrent net? would deeper architecture work better?). We have created a 2 hidden layer net and it felt quite ok but we simply had no time to explore other possibillities and went with the option that felt as the best at the time. This could have gotten us to a place where we were getting somewhat decent results and take us astray from the path to a better model, which could have been more complex/have different structure/...
+
+Another huge issue is that we did not know what constitutes a good result. What error rate is good? How many false positives or false negatives is it ok to have? We again have no idea and we had because of that a very hard time with tuning the model. Without knowing the real business case behind the problem it is very hard to try to optimize  model.
+
+The actions we have taken were mainly trying to find answers on google or talk with other people who were working on the same problem and see how they dealt with the same issue we had. Often the problem lied in the computational complexity and we solved that by either using different technique or lowering the complexity of task to work with smaller data (i.e. less columns).
+
+
+
+
+
