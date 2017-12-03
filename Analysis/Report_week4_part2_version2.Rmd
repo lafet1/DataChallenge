@@ -210,18 +210,62 @@ We get following result after 20 epochs:
 
 
 What happens if we add more epochs?
+
+
+
 ```{r}
-history <- nn %>% fit(
-  x_train, y_train, shuffle = T,
-  epochs = 10, batch_size = 2048, 
-  validation_set = 0.2)
+
+# keras
+nn_varepochs <- keras_model_sequential()
+nn_varepochs %>% 
+  layer_dense(units = 512, input_shape = c(dim(x_train)[2])) %>% 
+  layer_dropout(rate = 0.4) %>% 
+  layer_activity_regularization(l1 = 0.00002) %>%
+  layer_activation_leaky_relu(alpha = 0.55) %>%
+  
+  # sofar (probably) best combinations (all in layer 1) - alpha = 0.55, l1 = 0.00003;
+  # alpha = 0.6, l1 = 0.00003; alpha = 0.6, l1 = 0.00002; alpha = 0.55, l1 = 0.00001
+  
+  layer_dense(units = 256) %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_activity_regularization(l1 = 0.0000145) %>%
+  layer_activation_leaky_relu(alpha = 0.5) %>%
+  # reg parameter can be as high as 0.00002
+
+  layer_dense(units = 32) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_activation_leaky_relu(alpha = 0.3) %>%
+  
+  layer_dense(units = 2, activation = 'softmax')
 
 
-pred <- nn %>% 
-  predict_classes(x_test)
+nn_varepochs %>% compile(
+  loss = c('binary_crossentropy'),
+  optimizer = optimizer_adam(lr = 0.00001),
+  metrics = c('accuracy'))
 
 
-confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
+results <- matrix(ncol = 2, nrow = 25)
+for (i in 1:25){
+  history <- nn_varepochs %>% fit(
+    x_train, y_train, shuffle = T,
+    epochs = 2, batch_size = 2048, 
+    validation_set = 0.2)
+
+
+  pred <- nn_varepochs %>% 
+    predict_classes(x_test)
+
+
+  result_temp <- confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
+  results[i, ] <- result_temp$byClass[1:2]
+  print(result_temp$byClass[1:2])
+}
+cbind(results, (1:25) * 2)
+colnames(results) <- c("sensitivity", "specificity", "epochs")
+results <- results %>% as.data.frame() %>% as.tbl() %>%
+  ggplot(aes(x = epochs)) + geom_line(aes(y=sensitivity)) + geom_line(aes(specificity))
+
 ```
 
 # Question 13
