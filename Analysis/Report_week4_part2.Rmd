@@ -181,8 +181,43 @@ pred <- nn %>%
 confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
 
 ```
+
+
+After 10 epochs, we get
+```{block}
+Confusion Matrix and Statistics
+
+          Reference
+Prediction      0      1
+         0 573576  11281
+         1  43876   2434
+                                          
+               Accuracy : 0.9126          
+                 95% CI : (0.9119, 0.9133)
+    No Information Rate : 0.9783          
+    P-Value [Acc > NIR] : 1               
+                                          
+                  Kappa : 0.0492          
+ Mcnemar's Test P-Value : <2e-16          
+                                          
+            Sensitivity : 0.177470        
+            Specificity : 0.928940        
+         Pos Pred Value : 0.052559        
+         Neg Pred Value : 0.980712        
+             Prevalence : 0.021730        
+         Detection Rate : 0.003856        
+   Detection Prevalence : 0.073372        
+      Balanced Accuracy : 0.553205        
+                                          
+       'Positive' Class : 1    
+```
+
+
+
+
+
 We get following result after 20 epochs:
-```{r}
+```{block}
 #           Reference
 # Prediction      0      1
 #          0 521796   9096
@@ -222,6 +257,38 @@ pred <- nn %>%
 
 
 confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
+```
+
+
+
+```{block}
+
+Confusion Matrix and Statistics
+
+          Reference
+Prediction      0      1
+         0 426517   7136
+         1 190935   6579
+                                         
+               Accuracy : 0.6862         
+                 95% CI : (0.685, 0.6873)
+    No Information Rate : 0.9783         
+    P-Value [Acc > NIR] : 1              
+                                         
+                  Kappa : 0.0226         
+ Mcnemar's Test P-Value : <2e-16         
+                                         
+            Sensitivity : 0.47969        
+            Specificity : 0.69077        
+         Pos Pred Value : 0.03331        
+         Neg Pred Value : 0.98354        
+             Prevalence : 0.02173        
+         Detection Rate : 0.01042        
+   Detection Prevalence : 0.31293        
+      Balanced Accuracy : 0.58523        
+                                         
+       'Positive' Class : 1
+       
 ```
 
 # Question 13
