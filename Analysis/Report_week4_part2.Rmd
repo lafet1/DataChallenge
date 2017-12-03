@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r, warning = FALSE, message=FALSE, error=FALSE}
 library(tidyverse)
 library(keras)
 library(mlr)
@@ -37,41 +37,69 @@ Later we addressed the imbalanced data set issue. We simply cannot train a model
 We start off by loading the data, under- and oversampling and preparing them for the modeling.
 
 ```{r}
+gc()
+
+load("prepared_dataset.RData")
+
+# Needed in case for quick run:
+# size_of_random_subset <- 0.01
+# rnd <- runif(n = dim(d)[1])
+# d <- d[rnd < size_of_random_subset, ]
+
+
+
 rnd <- runif(n = dim(d)[1])
-d <- d[rnd < 0.01, ]
-
-##### actual data load is missing
-
-rnd <- runif(n = dim(d)[1])
-# d_test <- d[rnd < 0.15, ] # true data for final modeling
-# d_train <- d[rnd >= 0.15, ]
-
-d_test <- d[rnd < 0.05, ] # only for testing purposes, leave it here?
-d_train <- d[rnd >= 0.9, ]
-
+d_test <- d[rnd < 0.15, ] # true data for final modeling
+d_train <- d[rnd >= 0.15, ]
 rm(d)
-rm(rnd)
+
+factors <- c("was_promoted", 
+             "visible_in_profile", "is_liquid", "excl_descr", 
+             "has_capslock_descr", "excl_title", "has_capslock_title", 
+             "no_price", "no_descr", "bad_cl_text", "good_cl_text",           
+             "good_cl_categs",          
+             "eight_to_sixteen",        
+             "seventeen_to_twentyfour", 
+             "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9",
+             "is_weekend")
 
 
-y_test <- to_categorical(d_test$was_promoted)
-y_train <- to_categorical(d_train$was_promoted)
-d_test$was_promoted <- NULL
-d_train$was_promoted <- NULL
+d_factors <- d_train %>% mutate_if(colnames(.) %in% factors, as.factor)
+rm(d_train)
+gc()
 
-# balancing data set
-df_train <- cbind(d_train, unname(y_train[, 2]))
-names(df_train)[length(names(df_train))] <- "was_promoted"
-df_train$was_promoted <- as.factor(df_train$was_promoted)
-task = makeClassifTask(data = df_train, target = "was_promoted")
-task.under = undersample(task, rate = 1/3)
-task.over = oversample(task.under, rate = 10)
 
-df_train <- getTaskData(task.over)
-y2_train <- to_categorical(as.numeric(df_train$was_promoted) - 1)
-df_train$was_promoted <- NULL
+##### over/under sample
+task <- makeClassifTask(data = d_factors, target = "was_promoted")
+task.under <- undersample(task, rate = 1/3)
+task.over <- oversample(task.under, rate = 10)
 
-df_train <- as.matrix(df_train)
-d_test <- as.matrix(d_test)
+table(getTaskTargets(task.over))
+d_factors <- getTaskData(task.over)
+
+my_fun <- function(x){as.numeric(as.vector(x))}
+x_train <- d_factors %>% mutate_if(colnames(.) %in% factors, my_fun)
+x_test <- d_test
+
+rm(d_test)
+rm(d_factors)
+
+
+y_test <- to_categorical(x_test$was_promoted)
+y_train <- to_categorical(x_train$was_promoted)
+
+x_test$was_promoted <- NULL
+x_train$was_promoted <- NULL
+
+
+x_train <- as.matrix(x_train)
+x_test <- as.matrix(x_test)
+
+rm(list = setdiff(ls(), c("x_test", "x_train", "y_test", "y_train")))
+
+
+
+
 ```
 
 Now we train the logit model.
@@ -80,7 +108,7 @@ Now we train the logit model.
 logit <- keras_model_sequential() 
 
 logit %>% 
-  layer_dense(units = 2, activation = 'softmax', input_shape = c(784)) %>% 
+  layer_dense(units = 2, activation = 'softmax', input_shape = c(dim(x_train)[2])) %>% 
   
 summary(logit)
 
@@ -91,15 +119,15 @@ logit %>% compile(
 )
 
 history1 <- logit %>% fit(
-  df_train, y2_train, 
-  epochs = 30, batch_size = 128, 
+  x_train, y_train, 
+  epochs = 5, batch_size = 1024, 
   validation_split = 0.2
 )
 plot(history1)
 
-pred1 <- model1 %>% predict_classes(x_test) %>% head()
+pred1 <- logit %>% predict_classes(x_test)
 
-confusionMatrix(as.numeric(pred1), y_test[, 2])
+confusionMatrix(as.numeric(pred1), y_test[, 2], positive = "1")
 
 ```
 
@@ -112,7 +140,7 @@ Here we train the neural network.
 # keras
 nn <- keras_model_sequential()
 nn %>% 
-  layer_dense(units = 512, input_shape = c(dim(df_train)[2])) %>% 
+  layer_dense(units = 512, input_shape = c(dim(x_train)[2])) %>% 
   layer_dropout(rate = 0.4) %>% 
   layer_activity_regularization(l1 = 0.00002) %>%
   layer_activation_leaky_relu(alpha = 0.55) %>%
@@ -141,16 +169,16 @@ nn %>% compile(
 
 
 history <- nn %>% fit(
-  df_train, y2_train, shuffle = T,
-  epochs = 10, batch_size = 512, 
+  x_train, y_train, shuffle = T,
+  epochs = 10, batch_size = 2048, 
   validation_set = 0.2)
 
 
 pred <- nn %>% 
-  predict_classes(d_test)
+  predict_classes(x_test)
 
 
-confusionMatrix(as.numeric(pred), y_test[, 2])
+confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
 
 ```
 
