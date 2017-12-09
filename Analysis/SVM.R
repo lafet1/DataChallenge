@@ -2,6 +2,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 library(kernlab)
 library(mlr)
 library(tidyverse)
+library(caret)
 gc()
 
 load("prepared_dataset.RData")
@@ -67,3 +68,5 @@ for (i in ind){
 sign(predict(on, x_test)) -> abc
 sum(y_test == abc)
 length(abc)
+
+confusionMatrix(abc, y_test)
