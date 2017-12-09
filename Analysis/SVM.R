@@ -54,13 +54,13 @@ x_train$was_promoted <- NULL
 x_train <- as.matrix(x_train)
 x_test <- as.matrix(x_test)
 
-on <- inlearn(124,kernel = "rbfdot",kpar = list(sigma=0.2),
+on <- inlearn(124, kernel = "rbfdot", kpar = list(sigma=0.1), # try also 0.01 and 0.001
               type="classification")
 ind <- sample(1:nrow(x_train),nrow(x_train))
 
 counter <- 1
 for (i in ind){
-  on <- onlearn(on,x_train[i, ],y_train[i],nu=0.03,lambda=0.1)
+  on <- onlearn(on, x_train[i, ], y_train[i], nu=0.03, lambda=0.1)
   print(counter)
   counter <- counter + 1
 }
