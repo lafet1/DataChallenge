@@ -66,7 +66,7 @@ d_resampled <- getTaskData(task.under)
 ###### KERAS PREP
 
 my_fun <- function(x){as.numeric(as.vector(x))}
-d_train <- d_resampled %>% mutate_if(colnames(.) %in% factors, my_fun)
+x_train <- d_resampled %>% mutate_if(colnames(.) %in% factors, my_fun)
 
 
 

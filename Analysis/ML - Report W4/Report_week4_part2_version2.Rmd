@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
 ```{r, warning = FALSE, message=FALSE, error=FALSE}
@@ -36,7 +36,7 @@ Later we addressed the imbalanced data set issue. We simply cannot train a model
 
 We start off by loading the data, under- and oversampling and preparing them for the modeling.
 
-```{r}
+```{r, warning = FALSE}
 gc()
 
 load("prepared_dataset.RData")
@@ -104,7 +104,7 @@ rm(list = setdiff(ls(), c("x_test", "x_train", "y_test", "y_train")))
 
 Now we train the logit model.
 
-```{r}
+```{r, warning=FALSE}
 logit <- keras_model_sequential() 
 
 logit %>% 
@@ -136,7 +136,7 @@ confusionMatrix(as.numeric(pred1), y_test[, 2], positive = "1")
 
 Here we train the neural network.
 
-```{r}
+```{r, eval=FALSE}
 # keras
 nn <- keras_model_sequential()
 nn %>% 
@@ -170,7 +170,7 @@ nn %>% compile(
 
 history <- nn %>% fit(
   x_train, y_train, shuffle = T,
-  epochs = 10, batch_size = 2048, 
+  epochs = 20, batch_size = 2048, 
   validation_set = 0.2)
 
 
@@ -245,11 +245,15 @@ nn_varepochs %>% compile(
   metrics = c('accuracy'))
 
 
-results <- matrix(ncol = 2, nrow = 25)
-for (i in 1:25){
+results <- matrix(ncol = 2, nrow = 12)
+```
+
+```{r}
+
+for (i in 1:12){
   history <- nn_varepochs %>% fit(
     x_train, y_train, shuffle = T,
-    epochs = 2, batch_size = 2048, 
+    epochs = 3, batch_size = 4096, 
     validation_set = 0.2)
 
 
@@ -261,12 +265,30 @@ for (i in 1:25){
   results[i, ] <- result_temp$byClass[1:2]
   print(result_temp$byClass[1:2])
 }
-cbind(results, (1:25) * 2)
+```
+
+
+```{r}
+results <- cbind(results, (1:12) * 3)
 colnames(results) <- c("sensitivity", "specificity", "epochs")
-results <- results %>% as.data.frame() %>% as.tbl() %>%
-  ggplot(aes(x = epochs)) + geom_line(aes(y=sensitivity)) + geom_line(aes(specificity))
+results <- results %>% 
+  as.data.frame() %>% 
+  as.tbl() %>%
+  ggplot(aes(x = epochs)) + 
+  geom_line(aes(y=sensitivity), color = "red") + 
+  geom_line(aes(y=specificity)) + 
+  ylab("sensitivity (red) / specificity (black)")
+results
 
 ```
+
+We can observe the tradeoff between specificity and sensitivity. 
+In the case of 36 epochs, results are following:
+
+```{r}
+result_temp
+```
+
 
 # Question 13
 
