@@ -64,5 +64,6 @@ for (i in ind){
   counter <- counter + 1
 }
 
-
-
+sign(predict(on, x_test)) -> abc
+sum(y_test == abc)
+length(abc)
