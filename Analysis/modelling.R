@@ -104,3 +104,33 @@ confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
 sum(y_test[,1])/dim(y_test)[1]
 # [1] 0.9781552
 
+
+###### logit
+
+logit <- keras_model_sequential() 
+
+logit %>% 
+  layer_dense(units = 2, activation = 'softmax', input_shape = c(dim(df_train)[2])) %>%
+  layer_activity_regularization(l1 = 0.00002)
+  
+summary(logit)
+
+logit %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_adam(),
+  metrics = c('accuracy')
+)
+
+history_logit <- logit %>% fit(
+  df_train, y2_train, shuffle = T,
+  epochs = 20, batch_size = 2056, 
+  validation_split = 0.2
+)
+
+plot(history_logit)
+
+pred_logit <- logit %>% 
+  predict_classes(d_test)
+
+confusionMatrix(as.numeric(pred_logit), y_test[, 2], positive = "1")
+
