@@ -1,0 +1,807 @@
+---
+title: "WHOLE MARKDOWN"
+author: "Jan Hynek"
+date: "11 prosince 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+During this analysis, as we have nice and big dataset, we decided to use text2vec package, created by Dmitri Selivanov.
+Its main benefit is its efficiency, on the other hand its documentation is sometimes bit lacking. However, this will allow us to do word embeddings which we consider as a nice touch for our feature engineering. 
+```{r packages}
+library(tidyverse)
+library(feather)
+library(text2vec)
+library(tokenizers)
+library(stringr)
+library(slam)
+library(lubridate)
+library(textstem)
+library(hunspell)
+library(clustMixType)
+library(keras)
+library(mlr)
+library(caret)
+
+```
+
+Loading data. We have files in one folder and data in another folder, therefore we set working directory like this. Afterwards, we set share of data which we would like to work with during this analysis, as working with whole dataset is usually inconvinient and uneccessary. However, we calculated results for the whole
+```{r loading data, echo = FALSE, warning=FALSE, error=FALSE}
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# setwd("..")
+
+share_of_data <- 0.005
+set.seed(926021)
+d <- read_feather("C:\\Users\\jan\\Documents\\Škola\\UvA\\Výuka\\Machine Learning for Econometrics\\Project\\DataChallenge\\data\\ph_ads_payment_indicator.feather")
+# if (share_of_data <= 1){
+#     subdf <- d
+#     rm(d)
+# } else{
+#     subdf <- d %>% 
+#     mutate(rnd = runif(dim(subdf[1]))) %>%
+#     filter(rnd < share_of_data)
+#     subdf$rnd <- NULL
+#     rm(d)
+# }
+
+
+rnd <- runif(n = dim(d)[1])
+subdf <- d[rnd < share_of_data, ]
+rm(d)
+```
+
+
+# Document term matrix creation
+In this section we prepare the features using text. 
+We create our preparation function, which will be applied to all texts. This consists of making all letters lower case, removing numbers, one- and two-letter words and omitting whitespace.
+Then we create tokenizer function. As we would like to create document - term matrix, we need word tokenizer.
+
+```{r prep and token fun}
+prep_fun <- function(x) {
+  x <- tolower(x) # lower case
+  x <- str_replace_all(x, '[:digit:]', ' ') # removing numbers
+  x <- str_replace_all(x, '\\b\\w{1,2}\\b',' ') # removing one and two letter words
+  x <- str_replace_all(x, '[:punct:]', ' ') # removing punctuation
+  x <- str_replace_all(x, '\\s+', ' ')# removing white space
+  x <- lemmatize_strings(x) # lemmatization of words. similar to stemming
+  return(x)
+}
+tok_fun <- function(x){
+  tokenize_words(x, stopwords = stopwords()) # removing stopwords
+  } 
+```
+
+These functions are afterwards fed to iterator, which iterates on the descriptions. Then iterator creates vocabulary in a format of sparse matrix. In our case dataset consists of _432 thousand_ different terms. 
+
+```{r iterator and vocab}
+iterator <- itoken(subdf$description, # data to clean
+                  preprocessor = prep_fun, 
+                  tokenizer = tok_fun, 
+                  ids = subdf$id, 
+                  progressbar = TRUE)
+vocab <- create_vocabulary(iterator)
+```
+However, most of these words usually appears only once in the whole dataset. It is useful then to prune these words. We chose arbitrarily that word has to be at least 10 times in the dataset, in at least 0.1%  and at most 50% of the documents. This left us with ~2500 words. According to Paul Nation and Robert Waring (1997), this is equal to text coverage of ~80%. 
+```{r pruning vocab}
+pruned_vocab <- prune_vocabulary(vocab, 
+                                term_count_min = 10, 
+                                doc_proportion_max = 0.5,
+                                doc_proportion_min = 0.0005)
+
+```
+
+Now, we are ready to vectorize the results and create Document - Term Matrix.
+```{r dtm}
+vectorizer <- vocab_vectorizer(pruned_vocab)
+dtm <- create_dtm(iterator, vectorizer)
+```
+
+Let's have a look at the DTM. Dimensions fits - 4M rows, 2500 columns.
+The least common word is 4000 times present in the dataset, the most common one have almost 750k occurences.
+```{r dtm stats}
+dim(dtm)
+summary(col_sums(dtm))
+```
+
+What are the most common words? 
+```{r most common}
+sort(col_sums(dtm), decreasing = TRUE)[1:24]
+
+```
+What about the least present words? Do they make any sense?
+```{r least common}
+sort(col_sums(dtm), decreasing = FALSE)[1:24]
+```
+
+```{r wordcloud}
+library(wordcloud)
+freq <- data.frame(freqterms = sort(col_sums(dtm), decreasing = TRUE))
+wordcloud(rownames(freq), freq[, 1], max.words=50, colors = brewer.pal(3, "Dark2"))
+```
+Let's do the same for the titles as well.
+```{r dtm and wordcloud for titles}
+iterator_title <- itoken(subdf$title, 
+                  preprocessor = prep_fun, 
+                  tokenizer = tok_fun, 
+                  ids = subdf$id, 
+                  progressbar = TRUE)
+vocab_title <- create_vocabulary(iterator_title)
+pruned_vocab_title <- prune_vocabulary(vocab_title, 
+                                term_count_min = 10, 
+                                doc_proportion_max = 0.5,
+                                doc_proportion_min = 0.0001)
+vectorizer_title <- vocab_vectorizer(pruned_vocab_title)
+dtm_title <- create_dtm(iterator_title, vectorizer_title)
+freq <- data.frame(freqterms = sort(col_sums(dtm_title), decreasing = TRUE))
+wordcloud(rownames(freq), freq[, 1], max.words=50, colors = brewer.pal(3, "Dark2"))
+```
+What about the dimensions?
+```{r}
+dim(dtm_title)
+```
+We have less words. This is expected, as titles have less words overall.
+
+
+We also add alternative dtm based on tfidf. This will be later used for modelling and comparing, which of these approaches is better.
+```{r}
+tfidf = TfIdf$new()
+# fit model to train data and transform train data with fitted model
+dtm_tfidf = fit_transform(dtm, tfidf)
+dtm_title_tfidf = fit_transform(dtm_title, tfidf)
+
+
+```
+
+
+#Metadata creation
+
+We decided to harvest other important information from the text. We think it might be useful to know how many letters are in uppercase, how many punctuation is in the text and else.
+
+
+```{r}
+tok_fun_dplyr <- function(x){
+  x <- tokenize_words(x, stopwords = stopwords())
+  x <- unlist(x)
+  return(x)
+  } 
+
+subdf <- subdf %>% mutate(upper_descr = str_count(description, "[:upper:]")) %>% 
+  mutate(punct_descr = str_count(description, "[:punct:]")) %>% 
+  mutate(length_descr = str_count(description)) %>% 
+  mutate(excl_descr = (str_count(description, "!") > 0)) %>%
+  mutate(has_capslock_descr = str_count(description, "[:upper:]") > 0) %>% 
+  mutate(upper_title = str_count(title, "[:upper:]")) %>% 
+  mutate(punct_title = str_count(title, "[:punct:]")) %>% 
+  mutate(length_title = str_count(title)) %>% 
+  mutate(excl_title = (str_count(title, "!") > 0)) %>%
+  mutate(has_capslock_title = str_count(title, "[:upper:]") > 0) %>%
+  mutate(n_words_title = str_count(title,'\\w+')) %>%
+  mutate(n_words_descr = str_count(description,'\\w+')) 
+```
+
+This is experiment. What is the share of correct words in the document?
+```{r}
+# subdf <- subdf %>% 
+#   mutate(correct_share_descr = sum(hunspell_check(tok_fun_dplyr(description)))/n_words_descr) %>% 
+#   mutate(correct_share_title = sum(hunspell_check(tok_fun_dplyr(title)))/n_words_descr)
+
+```
+We can also get rid of several variables. After thorough EDA we have found that these variables do not add value for future analysis.
+```{r}
+subdf$has_gg <- NULL
+subdf$has_skype <- NULL
+subdf$has_phone <- NULL
+```
+
+
+And this is it! we have two DTM matrices, both for description and title, along some metadata. These are going to be our features for future analysis.
+
+
+Now, we easily add one HUGE CHUNK which will connect the reports.
+```{r}
+ ##### LDA ####
+lda_model = LDA$new(n_topics = 50, doc_topic_prior = 1/50, topic_word_prior = 0.01)
+doc_topic_distr = lda_model$fit_transform(x = dtm, n_iter = 500, 
+                                          convergence_tol = 0.001, n_check_convergence = 25)
+doc_topic_distr <- doc_topic_distr %>% as.data.frame()
+doc_topic_distr <- doc_topic_distr %>% rownames_to_column(var = "id")
+subdf <- subdf %>% mutate(id = as.character(id))
+subdf <- subdf %>% inner_join(doc_topic_distr, by = "id")
+
+lda_model_title <- LDA$new(n_topics = 25, doc_topic_prior = 1/25, topic_word_prior = 0.01)
+doc_topic_distr_title <- lda_model_title$fit_transform(x = dtm_title, 
+                                                       n_iter = 250, 
+                                                       convergence_tol = 0.001, 
+                                                       n_check_convergence = 25)
+doc_topic_distr_title <- doc_topic_distr_title %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "id")
+colnames(doc_topic_distr_title) <- c("id", paste("title_V", 1:25, sep = ""))
+colnames(doc_topic_distr_title)
+
+ #### CONNECTING TO DATASET ####
+subdf <- subdf %>% inner_join(doc_topic_distr_title, by = "id")
+subdf$title <- NULL
+subdf$description <- NULL
+d <- subdf
+d$district_id <- NULL
+
+#### omiting vars and mutating time, etc
+d$private_business <- NULL
+d$id <- NULL
+d$created_at_first <- ymd_hms(d$created_at_first, tz = "Asia/Manila")
+d$is_liquid <- as.numeric(ifelse(d$is_liquid == "t", 1, 0))
+d$was_promoted <- as.numeric(ifelse(d$was_promoted == "t", 1, 0))
+
+d <- d %>% mutate(no_price = as.numeric(is.na(price))) %>% 
+  mutate(price = if_else(is.na(price), 0, price)) %>% 
+  mutate(hour = as.numeric(hour(created_at_first))) %>% 
+  mutate(no_descr = as.numeric(is.na(upper_descr))) %>%
+  mutate(month = month(created_at_first)) %>% 
+  mutate(wday = wday(created_at_first))  
+
+d <- d %>% 
+  group_by(user_id) %>% 
+  mutate(n_user_id = length(user_id)) %>% 
+  ungroup() %>% 
+  group_by(city_id) %>% 
+  mutate(n_city_id = length(city_id)) %>% 
+  ungroup() %>% 
+  group_by(subregion_id) %>% 
+  mutate(n_subregion_id = n()) %>% 
+  ungroup() %>% 
+  group_by(city_id) %>% 
+  mutate(n_city_id = n()) %>% 
+  ungroup() %>% 
+  group_by(category_id) %>% 
+  mutate(n_category_id = n()) %>% 
+  ungroup() 
+
+d[is.na(d)] <- 0
+d <- d %>%
+  mutate(upper_share_descr = (upper_descr/length_descr),
+         upper_share_title = (upper_title/length_title),
+         punct_share_title = (punct_title/length_title),
+         punct_share_descr = (punct_descr/length_descr),
+         bata_price = as.numeric(if_else((price + 1) %% 10 == 0, TRUE, FALSE)))
+d$user_id <- NULL
+d$created_at_first <- NULL
+
+#### Temporary factorizing ####
+d$city_id <- as.factor(d$city_id)
+d$subregion_id <- as.factor(d$subregion_id)
+d$city_id <- as.factor(d$city_id)
+d$category_id <- as.factor(d$category_id)
+d$visible_in_profile <- as.factor(d$visible_in_profile)
+d$month <- as.factor(d$month)
+d$hour <- as.factor(d$hour)
+d$excl_descr <- as.factor(d$excl_descr)
+d$has_capslock_descr <- as.factor(d$has_capslock_descr)
+d$excl_title <- as.factor(d$excl_title)
+d$has_capslock_title <- as.factor(d$has_capslock_title)
+d$is_liquid <- as.factor(d$is_liquid)
+d$was_promoted <- as.factor(d$was_promoted)
+d$no_descr <- as.factor(d$no_descr)
+d$no_price <- as.factor(d$no_price)
+d$bata_price <- as.factor(d$bata_price)
+
+#### Clustering. Taking good and bad clusters for text and categories ####
+clust_categories_text <- d %>%
+  select(category_id, starts_with("V",ignore.case = FALSE)) %>%
+  as.data.frame() %>% kproto(10)
+n_promoted_clust <- clust_categories_text$cluster[d$was_promoted == 1]
+table_clust_promoted <- table(n_promoted_clust)
+table_clust_size <- clust_categories_text$size
+up_ten <- 1:10
+full_indices <- up_ten[(as.character(1:10)%in% names(table_clust_promoted))]
+share_promoted_in_cluster <- table_clust_promoted/table_clust_size[full_indices]
+bad_cluster <- as.numeric(names(share_promoted_in_cluster)[share_promoted_in_cluster == min(share_promoted_in_cluster)])
+good_cluster <-as.numeric(names(share_promoted_in_cluster)[share_promoted_in_cluster == max(share_promoted_in_cluster)])
+d$bad_cl_text <- (clust_categories_text$cluster == bad_cluster)
+d$good_cl_text <- (clust_categories_text$cluster == good_cluster)
+
+#### Categories for price ####
+clust_categories <- d %>%
+  select(category_id, price) %>%
+  as.data.frame() %>% kproto(10)
+n_promoted_clust <- clust_categories$cluster[d$was_promoted == 1]
+table_clust_promoted <- table(n_promoted_clust)
+table_clust_size <- clust_categories$size
+up_ten <- 1:10
+full_indices <- up_ten[(as.character(1:10)%in% names(table_clust_promoted))]
+share_promoted_in_cluster <- table_clust_promoted/table_clust_size[full_indices]
+bad_cluster <- as.numeric(names(share_promoted_in_cluster)[share_promoted_in_cluster == min(share_promoted_in_cluster)])
+good_cluster <-as.numeric(names(share_promoted_in_cluster)[share_promoted_in_cluster == max(share_promoted_in_cluster)])
+d$bad_cl_categs <- (clust_categories$cluster == bad_cluster)
+d$good_cl_categs <- (clust_categories$cluster == good_cluster)
+
+##### for categories ####
+abcd <- d %>% 
+  group_by(category_id, was_promoted) %>% 
+  count(was_promoted) 
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+
+b <- b[(b$category_id %in% a$category_id), ]
+a <- a[(a$category_id %in% b$category_id), ]
+
+key <- b %>% 
+  left_join(a, by = "category_id") %>%
+  mutate(was_to_wasnt_category = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_category)) %>% ungroup() %>%
+  select(category_id, was_to_wasnt_category)
+
+d <- d %>% 
+  left_join(key, by = "category_id")
+
+##### for cities ####
+abcd <- d %>% 
+  group_by(city_id, was_promoted) %>% 
+  count(was_promoted)
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+b <- b[(b$city_id %in% a$city_id), ]
+a <- a[(a$city_id %in% b$city_id), ]
+
+key <- b %>% 
+  left_join(a, by = "city_id") %>%
+  mutate(was_to_wasnt_city = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_city)) %>% ungroup() %>%
+  select(city_id, was_to_wasnt_city)
+
+d <- d %>% 
+  left_join(key, by = "city_id")
+
+#### for regions ####
+abcd <- d %>% 
+  group_by(region_id, was_promoted) %>% 
+  count(was_promoted)
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+b <- b[(b$region_id %in% a$region_id), ]
+a <- a[(a$region_id %in% b$region_id), ]
+
+key <- b %>% 
+  left_join(a, by = "region_id") %>%
+  mutate(was_to_wasnt_region = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_region)) %>% ungroup() %>%
+  select(region_id, was_to_wasnt_region)
+
+d <- d %>% 
+  left_join(key, by = "region_id")
+
+#### for subregions ####
+abcd <- d %>% 
+  group_by(subregion_id, was_promoted) %>% 
+  count(was_promoted)
+
+a <- abcd[abcd$was_promoted == 0, ]
+b <- abcd[abcd$was_promoted == 1, ]
+b <- b[(b$subregion_id %in% a$subregion_id), ]
+a <- a[(a$subregion_id %in% b$subregion_id), ]
+
+key <- b %>% 
+  left_join(a, by = "subregion_id") %>%
+  mutate(was_to_wasnt_subregion = n.x/n.y) %>% 
+  arrange(desc(was_to_wasnt_subregion)) %>% ungroup() %>%
+  select(subregion_id, was_to_wasnt_subregion)
+
+d <- d %>% 
+  left_join(key, by = "subregion_id")
+
+d[is.na(d)] <- 0
+
+### omitting variables ####
+d <- d %>% 
+  select(-c(region_id, subregion_id, city_id, category_id))
+
+#### remaking the time ####
+d <- d %>% 
+  mutate(eight_to_sixteen = (hour %in% c(8:16))) %>% 
+  mutate(seventeen_to_twentyfour = (hour %in% c(17:24)))
+
+#### months
+d <- d %>% mutate(m1 = (month == 1), 
+                  m2 = (month == 2), 
+                  m3 = (month == 3), 
+                  m4 = (month == 4),
+                  m5 = (month == 5),
+                  m6 = (month == 6),
+                  m7 = (month == 7),
+                  m8 = (month == 8),
+                  m9 = (month == 9))
+
+#### checking weekends
+d <- d %>% mutate(is_weekend = (wday > 5))
+
+# omitting time vars ####
+d <- d %>% select(-wday)
+d <- d %>% select(-month)
+d <- d %>% select(-hour)
+
+my_fun <- function(x) {if_else((x==1 | x==TRUE), 1, 0)}
+
+d <- d %>% mutate_if(is.factor, my_fun)
+d <- d %>% mutate_if(is.logical, as.numeric)
+```
+
+
+
+Now, we will add chunk for easy peasy SVM
+```{r}
+rnd <- runif(n = dim(d)[1])
+d_test <- d[rnd < 0.15, ] # true data for final modeling
+d_train <- d[rnd >= 0.15, ]
+
+
+factors <- c("was_promoted", 
+             "visible_in_profile", "is_liquid", "excl_descr", 
+             "has_capslock_descr", "excl_title", "has_capslock_title", 
+             "no_price", "no_descr", "bad_cl_text", "good_cl_text",           
+             "good_cl_categs",          
+             "eight_to_sixteen",        
+             "seventeen_to_twentyfour", 
+             "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9",
+             "is_weekend")
+
+
+d_factors <- d_train %>% mutate_if(colnames(.) %in% factors, as.factor)
+rm(d_train)
+gc()
+
+
+##### over/under sample
+task <- makeClassifTask(data = d_factors, target = "was_promoted")
+task.under <- undersample(task, rate = 1/3)
+task.over <- oversample(task.under, rate = 10)
+
+table(getTaskTargets(task.over))
+d_factors <- getTaskData(task.over)
+
+my_fun <- function(x){as.numeric(as.vector(x))}
+x_train <- d_factors %>% mutate_if(colnames(.) %in% factors, my_fun)
+x_test <- d_test
+
+
+
+y_train <- x_train %>% select(was_promoted) %>% transmute(y=if_else(was_promoted == 0, -1, 1)) %>% as.matrix()
+y_test <- x_test %>% select(was_promoted) %>% transmute(y=if_else(was_promoted == 0, -1, 1)) %>% as.matrix()
+x_test$was_promoted <- NULL
+x_train$was_promoted <- NULL
+x_train <- as.matrix(x_train)
+x_test <- as.matrix(x_test)
+
+on <- inlearn(dim(x_train)[2], kernel = "rbfdot", kpar = list(sigma = 0.001), # try also 0.01 and 0.001
+              type="classification")
+ind <- sample(1:nrow(x_train),nrow(x_train))
+
+
+# lambdas <- 10 ^ seq(-4, 0, by = 0.45)
+# for (lambda in lambdas) {
+#   nus <- 10 ^ seq(-3, 1, by = 0.45)
+#   for (nu in nus) {
+#     counter <- 1
+#     for (i in ind) {
+#       on <- onlearn(on, x_train[i, ], y_train[i], nu = nu, lambda = lambda)
+#       
+#       counter <- counter + 1
+#     }
+#     predictions <- sign(predict(on, x_test))
+#     print(lambda)
+#     print(nu)
+#     print(confusionMatrix(predictions, y_test)$byClass[1:2])
+#   }
+# }
+
+
+for (i in ind) {
+  on <- onlearn(on, x_train[i, ], y_train[i], nu = 0.2, lambda = 0.05)
+  
+  counter <- counter + 1
+}
+predictions <- sign(predict(on, x_test))
+confusionMatrix(predictions, y_test)
+
+```
+
+
+
+# Question 10
+
+We have altered our data in two ways since our last assignment. we will describe the way we transformed the data from our DTM and then the changes to the rest of the dataset.
+
+We had our normalized Bag of Words (using TF-IDF) and applied on it the standard Latent Dirichlet allocation. We have decided to group our description DTM into 50 columns and our title DTM into 25 columns due to the technical constraints (our memory size). We also relied on descriptions and recommendations found throughout several documentations/implementations of LDA and some discussions related to the problem of dimensionality reduction of text data. We also considered using the Word2vec or some version of word embeddings but again due to uncertainty about the outcome and too high computational cost we have steered away and chose the functioning approach of LDA on the normalized Bag of Words.
+
+Second part of our work with data was dimensionality reduction through changes of our factor variables, i.e. categories, regions and cities. These dummy variables had many levels and would bring a large number of additional dimensons into our dataset and we were worried that such a large number of additional dimensions would severely lower the strength of our model. We have found a way around it and created a numerical variable aimed at distinguishing between these categories/regions/cities. We took the number of promoted items and divided by the number of not promoted items in each category/city/ region and managed to squeeze into this variable both its size and share of promoted items, while significantly lowering the number of dimensions. We have also considered encoding by hand categories as well as cities and regions into more homogenous clusters, e.g. electronics, large cities, regions in the north etc. Other changes included replacing the unique user id with the number of items the specific user posted on the site. There were few other changes similar to those just described.
+
+Later we addressed the imbalanced data set issue. We simply cannot train a model on a dataset such as this where we have only slightly more than 2% of positive observations. There are two solutions to this issue, generating more positive observations or ignoring some negative. Due to the size of our dataset and the overall imbalancedness we combined these two approaches. We have also tried the SMOTE (Synthetic minority oversampling technique) but the results were not satisfying. This is most likely due to the SMOTE picking up on too much noise and not replicating the signal in our positive observations. On top of that we were constrained by our machinery as applying algorithm such as SMOTE on dataset of this size is not feasible on our setup. Thus we have chosen to use basic under- and oversampling of our dataset to have the share of observations slightly above the 50/50 threshold, i.e. somewhere between 50 and 60% of negative observations present in dataset.
+
+# Question 11
+
+We start off by loading the data, under- and oversampling and preparing them for the modeling.
+
+```{r, warning = FALSE}
+gc()
+
+#load("prepared_dataset.RData")
+
+# Needed in case for quick run:
+# size_of_random_subset <- 0.01
+# rnd <- runif(n = dim(d)[1])
+# d <- d[rnd < size_of_random_subset, ]
+
+
+
+rnd <- runif(n = dim(d)[1])
+d_test <- d[rnd < 0.15, ] # true data for final modeling
+d_train <- d[rnd >= 0.15, ]
+rm(d)
+
+factors <- c("was_promoted", 
+             "visible_in_profile", "is_liquid", "excl_descr", 
+             "has_capslock_descr", "excl_title", "has_capslock_title", 
+             "no_price", "no_descr", "bad_cl_text", "good_cl_text",           
+             "good_cl_categs", "bad_cl_categs",          
+             "eight_to_sixteen",        
+             "seventeen_to_twentyfour", 
+             "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9",
+             "is_weekend")
+
+
+d_factors <- d_train %>% mutate_if(colnames(.) %in% factors, as.factor)
+rm(d_train)
+gc()
+
+
+##### over/under sample
+task <- makeClassifTask(data = d_factors, target = "was_promoted")
+task.under <- undersample(task, rate = 1/3)
+task.over <- oversample(task.under, rate = 10)
+
+table(getTaskTargets(task.over))
+d_factors <- getTaskData(task.over)
+
+my_fun <- function(x){as.numeric(as.vector(x))}
+x_train <- d_factors %>% mutate_if(colnames(.) %in% factors, my_fun)
+x_test <- d_test
+
+rm(d_test)
+rm(d_factors)
+
+
+y_test <- to_categorical(x_test$was_promoted)
+y_train <- to_categorical(x_train$was_promoted)
+
+x_test$was_promoted <- NULL
+x_train$was_promoted <- NULL
+
+
+x_train <- as.matrix(x_train)
+x_test <- as.matrix(x_test)
+
+rm(list = setdiff(ls(), c("x_test", "x_train", "y_test", "y_train")))
+
+
+
+
+```
+
+Now we train the logit model.
+
+```{r, warning=FALSE}
+logit <- keras_model_sequential() 
+
+logit %>% 
+  layer_dense(units = 2, activation = 'softmax', input_shape = c(dim(x_train)[2])) %>% 
+  
+summary(logit)
+
+logit %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_adam(),
+  metrics = c('accuracy')
+)
+
+history1 <- logit %>% fit(
+  x_train, y_train, 
+  epochs = 5, batch_size = 1024, 
+  validation_split = 0.2
+)
+plot(history1)
+
+pred1 <- logit %>% predict_classes(x_test)
+
+confusionMatrix(as.numeric(pred1), y_test[, 2], positive = "1")
+
+```
+
+
+
+# Question 12
+
+Here we train the neural network.
+
+```{r, eval=FALSE}
+# keras
+nn <- keras_model_sequential()
+nn %>% 
+  layer_dense(units = 512, input_shape = c(dim(x_train)[2])) %>% 
+  layer_dropout(rate = 0.4) %>% 
+  layer_activity_regularization(l1 = 0.00002) %>%
+  layer_activation_leaky_relu(alpha = 0.55) %>%
+  
+  # sofar (probably) best combinations (all in layer 1) - alpha = 0.55, l1 = 0.00003;
+  # alpha = 0.6, l1 = 0.00003; alpha = 0.6, l1 = 0.00002; alpha = 0.55, l1 = 0.00001
+  
+  layer_dense(units = 256) %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_activity_regularization(l1 = 0.0000145) %>%
+  layer_activation_leaky_relu(alpha = 0.5) %>%
+  # reg parameter can be as high as 0.00002
+
+  layer_dense(units = 32) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_activation_leaky_relu(alpha = 0.3) %>%
+  
+  layer_dense(units = 2, activation = 'softmax')
+
+
+nn %>% compile(
+  loss = c('binary_crossentropy'),
+  optimizer = optimizer_adam(lr = 0.00001),
+  metrics = c('accuracy'))
+
+
+
+history <- nn %>% fit(
+  x_train, y_train, shuffle = T,
+  epochs = 20, batch_size = 2048, 
+  validation_set = 0.2)
+
+
+pred <- nn %>% 
+  predict_classes(x_test)
+
+
+confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
+
+```
+
+
+
+We get following result after 20 epochs:
+```{r}
+#           Reference
+# Prediction      0      1
+#          0 521796   9096
+#          1  95656   4619
+#                                          
+#                Accuracy : 0.834          
+#                  95% CI : (0.8331, 0.835)
+#     No Information Rate : 0.9783         
+#     P-Value [Acc > NIR] : 1              
+#                                          
+#                   Kappa : 0.0445         
+#  Mcnemar's Test P-Value : <2e-16         
+#                                          
+#             Sensitivity : 0.336785       
+#             Specificity : 0.845079       
+#          Pos Pred Value : 0.046063       
+#          Neg Pred Value : 0.982867       
+#              Prevalence : 0.021730       
+#          Detection Rate : 0.007318       
+#    Detection Prevalence : 0.158872       
+#       Balanced Accuracy : 0.590932       
+#                                          
+#        'Positive' Class : 1              
+```                             
+
+
+What happens if we add more epochs?
+
+
+
+```{r}
+
+# keras
+nn_varepochs <- keras_model_sequential()
+nn_varepochs %>% 
+  layer_dense(units = 512, input_shape = c(dim(x_train)[2])) %>% 
+  layer_dropout(rate = 0.4) %>% 
+  layer_activity_regularization(l1 = 0.00002) %>%
+  layer_activation_leaky_relu(alpha = 0.55) %>%
+  
+  # sofar (probably) best combinations (all in layer 1) - alpha = 0.55, l1 = 0.00003;
+  # alpha = 0.6, l1 = 0.00003; alpha = 0.6, l1 = 0.00002; alpha = 0.55, l1 = 0.00001
+  
+  layer_dense(units = 256) %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_activity_regularization(l1 = 0.0000145) %>%
+  layer_activation_leaky_relu(alpha = 0.5) %>%
+  # reg parameter can be as high as 0.00002
+
+  layer_dense(units = 32) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_activation_leaky_relu(alpha = 0.3) %>%
+  
+  layer_dense(units = 2, activation = 'softmax')
+
+
+nn_varepochs %>% compile(
+  loss = c('binary_crossentropy'),
+  optimizer = optimizer_adam(lr = 0.00001),
+  metrics = c('accuracy'))
+
+
+results <- matrix(ncol = 2, nrow = 12)
+```
+
+```{r}
+
+for (i in 1:12){
+  history <- nn_varepochs %>% fit(
+    x_train, y_train, shuffle = T,
+    epochs = 3, batch_size = 4096, 
+    validation_set = 0.2)
+
+
+  pred <- nn_varepochs %>% 
+    predict_classes(x_test)
+
+
+  result_temp <- confusionMatrix(as.numeric(pred), y_test[, 2], positive = "1")
+  results[i, ] <- result_temp$byClass[1:2]
+  print(result_temp$byClass[1:2])
+}
+```
+
+
+
+
+
+
+```{r}
+results <- cbind(results, (1:12) * 3)
+colnames(results) <- c("sensitivity", "specificity", "epochs")
+results <- results %>% 
+  as.data.frame() %>% 
+  as.tbl() %>%
+  ggplot(aes(x = epochs)) + 
+  geom_line(aes(y=sensitivity), color = "red") + 
+  geom_line(aes(y=specificity)) + 
+  ylab("sensitivity (red) / specificity (black)")
+results
+
+```
+
+We can observe the tradeoff between specificity and sensitivity. 
+In the case of 36 epochs, results are following:
+
+```{r}
+result_temp
+```
+
+
+# Question 13
+
+We will describe our findings first, then move on to questions and how we addressed or tried to address them.
+
+Our models could not in simple accuracy beat the simple model of predicting only 0. This is mainly caused by our dataset being hugely imbalanced and the heuristic of classifying everyone as zero is extremely strong. We have tried many combinations and ended up with two hidden layer network with 512, 256, 32 and 2 neurons in the output layer. Using regularization and leaky relus as our activation functions led to decent results. The results were not good as we had trouble training the network and did not know how to best approach it. Our models mainly overpredicted positive observations or barely managed to detect any. In the end our best models (one of them is described here, other options are mentioned in the comments) managed to identify reasonable number of positive observations (between one fifth and half of them) while correctly classifying the negative observations as well (between one half and four fifths)
+
+Our problems and questions were plentiful. We have solved and addressed some but many are still bothering us. One of the problems is setting up the net. As we had no experience what so ever we were quite lost and stil are extremely unsure. The results fell most of the time basically random and unlike all of our previous experience with modeling (basic regression, some more complex ones, SVMs, ...)
+we did not feel that after the modeling ended we had achieved as much as was with the data and the method possible in the time elapsed. We have simply no idea whether the chosen structure is good for this kind of problem (e.g. should we have used something like convolutional/recurrent net? would deeper architecture work better?). We have created a 2 hidden layer net and it felt quite ok but we simply did not manage to explore properly other possibillities and went with the option that felt as the best at the time. This could have gotten us to a place where we were getting somewhat decent results and take us astray from the path to a better model, which could have been more complex/have different structure/...
+
+Another huge issue is that we did not know what constitutes a good result. What error rate is good? How many false positives or false negatives is it ok to have? We again have no idea and we had because of that a very hard time with tuning the model. Without knowing the real business case behind the problem it is very hard to try to optimize model. In the end we went with model that had decent accuracy with both negative and positive observations but if we knew which mistake was more costly we could have tuned our model better. Especially a tailor-made metric/loss function could have provided a lot of additional dsicriminative power.
+
+The actions we have taken were mainly trying to find answers on google or talk with other people who were working on the same problem and see how they dealt with the same issues we had. Often the problem lied in the computational complexity and we solved that by either using different technique or lowering the complexity of task to work with smaller data (i.e. loweing dimensionality).
+
+
+
+
